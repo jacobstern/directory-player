@@ -1,0 +1,14 @@
+.file-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  font-size: 12px;
+}
+
+.file-icon__music-icon {
+  font-size: 11px;
+}

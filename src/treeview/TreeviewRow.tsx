@@ -46,8 +46,7 @@ function TreeviewRow({
       type={item.type}
       name={item.name}
       depth={depth}
-      onExpandDirectory={handleExpandDirectory}
-      onCollapseDirectory={handleCollapseDirectory}
+      canPlay={item.canPlay}
     />
   );
 }

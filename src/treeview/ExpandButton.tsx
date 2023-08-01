@@ -13,7 +13,6 @@ function ExpandButton({ isExpanded, onToggle }: ExpandButtonProps) {
         xmlns="http://www.w3.org/2000/svg"
         height="1em"
         viewBox="0 0 320 512"
-        className="expand-button__icon"
         style={{ transform: `rotate(${isExpanded ? "90deg" : "0"}` }}
         stroke="currentColor"
         fill="currentColor"

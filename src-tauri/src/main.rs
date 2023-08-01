@@ -20,6 +20,8 @@ enum TreeviewItem {
     File {
         name: String,
         path: String,
+        #[serde(rename = "canPlay")]
+        can_play: bool,
     },
 }
 
@@ -41,9 +43,14 @@ fn build_directory_listing(read: ReadDir) -> Vec<TreeviewItem> {
                         is_expanded: false,
                     });
                 } else if file_type.is_file() {
+                    let name = entry.file_name().to_str().unwrap().to_owned();
+                    let can_play = vec![".mp3", ".flac", ".wav"]
+                        .iter()
+                        .any(|ext| name.ends_with(ext));
                     listing.push(TreeviewItem::File {
-                        name: entry.file_name().to_str().unwrap().to_owned(),
+                        name,
                         path: entry.path().to_str().unwrap().to_owned(),
+                        can_play,
                     });
                 }
             }

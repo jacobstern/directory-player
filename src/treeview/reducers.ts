@@ -49,11 +49,7 @@ function normalize(item: TreeviewItem): NormalizedTreeviewItem {
       isExpanded: item.isExpanded,
     };
   }
-  return {
-    type: item.type,
-    name: item.name,
-    path: item.path,
-  };
+  return item;
 }
 
 const itemsReducer: Reducer<

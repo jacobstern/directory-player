@@ -2,6 +2,7 @@ export type TreeviewFile = {
   type: "File";
   name: string;
   path: string;
+  canPlay: boolean;
 };
 
 export type TreeviewDirectory = {
