@@ -22,7 +22,7 @@ function recursiveNormalize(items: TreeviewItem[]): NormalizedTreeviewEntry[] {
   return items.flatMap(
     (i: TreeviewItem): NormalizedTreeviewEntry | NormalizedTreeviewEntry[] => {
       switch (i.type) {
-        case "Directory":
+        case "Directory": {
           const entry: NormalizedTreeviewEntry = {
             0: i.path,
             1: {
@@ -33,6 +33,7 @@ function recursiveNormalize(items: TreeviewItem[]): NormalizedTreeviewEntry[] {
             },
           };
           return [entry].concat(recursiveNormalize(i.children));
+        }
         default:
           return { 0: i.path, 1: i };
       }
@@ -63,7 +64,7 @@ const itemsReducer: Reducer<
           [string, NormalizedTreeviewItem],
         ],
       );
-    case ACTION_TREEVIEW_ITEM_UPDATE:
+    case ACTION_TREEVIEW_ITEM_UPDATE: {
       const updated = {
         ...state,
         [action.payload.path]: normalize(action.payload),
@@ -79,6 +80,7 @@ const itemsReducer: Reducer<
         );
       }
       return updated;
+    }
     default:
       return state;
   }
@@ -91,12 +93,13 @@ function recursiveNormalizeChildren(
 ): NormalizedDirectoryChildrenEntry[] {
   return items.flatMap((i) => {
     switch (i.type) {
-      case "Directory":
+      case "Directory": {
         const entry: NormalizedDirectoryChildrenEntry = {
           0: i.path,
           1: i.children.map((i) => i.path),
         };
         return [entry].concat(recursiveNormalizeChildren(i.children));
+      }
       default:
         return [];
     }

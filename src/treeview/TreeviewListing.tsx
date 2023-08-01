@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -14,32 +15,12 @@ import TreeviewRow from "./TreeviewRow";
 import { treeviewItemUpdate } from "./actions";
 import { TreeviewItem } from "./types";
 import { invoke } from "@tauri-apps/api";
+import { throttle } from "../utils/throttle";
 
 const LIST_ITEM_HEIGHT = 26;
 const SCROLL_BUFFER = 500;
 const SCROLL_THROTTLE_MS = 50;
 const RESIZE_THROTTLE_MS = 100;
-
-const throttle = (callback: any, wait: number) => {
-  let timeoutActive = false;
-  let pending: any = null;
-  return (...args: any) => {
-    if (timeoutActive) {
-      pending = args;
-      return;
-    }
-    timeoutActive = true;
-    let interval = setInterval(() => {
-      if (pending) {
-        callback(pending);
-        pending = null;
-      } else {
-        clearInterval(interval);
-        timeoutActive = false;
-      }
-    }, wait);
-  };
-};
 
 function TreeviewListing() {
   const [scrollContainerHeight, setScrollContainerHeight] = useState<
@@ -75,21 +56,23 @@ function TreeviewListing() {
       setScrollContainerHeight(Math.round(clientRect.height));
     }
   }, []);
-  const throttledHandleResize = useCallback(
-    throttle(() => {
-      if (scrollContainerRef.current) {
-        const clientRect = scrollContainerRef.current.getBoundingClientRect();
-        setScrollContainerHeight(Math.round(clientRect.height));
-      }
-    }, RESIZE_THROTTLE_MS),
+  const throttledHandleResize = useMemo(
+    () =>
+      throttle(() => {
+        if (scrollContainerRef.current) {
+          const clientRect = scrollContainerRef.current.getBoundingClientRect();
+          setScrollContainerHeight(Math.round(clientRect.height));
+        }
+      }, RESIZE_THROTTLE_MS),
     [],
   );
-  const throttledHandleScroll = useCallback(
-    throttle(() => {
-      if (scrollContainerRef.current) {
-        setScrollY(scrollContainerRef.current.scrollTop);
-      }
-    }, SCROLL_THROTTLE_MS),
+  const throttledHandleScroll = useMemo(
+    () =>
+      throttle(() => {
+        if (scrollContainerRef.current) {
+          setScrollY(scrollContainerRef.current.scrollTop);
+        }
+      }, SCROLL_THROTTLE_MS),
     [],
   );
   useEffect(() => {
@@ -99,15 +82,10 @@ function TreeviewListing() {
     };
   }, [throttledHandleResize]);
   useEffect(() => {
-    scrollContainerRef.current?.addEventListener(
-      "scroll",
-      throttledHandleScroll,
-    );
+    const refValue = scrollContainerRef.current;
+    refValue?.addEventListener("scroll", throttledHandleScroll);
     return () => {
-      scrollContainerRef.current?.removeEventListener(
-        "scroll",
-        throttledHandleScroll,
-      );
+      refValue?.removeEventListener("scroll", throttledHandleScroll);
     };
   }, [throttledHandleScroll]);
   const startIndex = Math.max(
