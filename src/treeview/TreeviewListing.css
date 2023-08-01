@@ -1,0 +1,9 @@
+.treeview-listing {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+.treeview-listing__container {
+  display: flex;
+  flex-flow: column;
+}

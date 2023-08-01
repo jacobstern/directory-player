@@ -1,5 +1,8 @@
 import { AppAction } from "../types";
-import { ACTION_TREEVIEW_INIT } from "./actionTypes";
+import {
+  ACTION_TREEVIEW_INIT,
+  ACTION_TREEVIEW_ITEM_UPDATE,
+} from "./actionTypes";
 import { NormalizedTreeviewItem, TreeviewItem, TreeviewState } from "./types";
 import { combineReducers } from "redux";
 import type { Reducer } from "redux";
@@ -37,6 +40,22 @@ function recursiveNormalize(items: TreeviewItem[]): NormalizedTreeviewEntry[] {
   );
 }
 
+function normalize(item: TreeviewItem): NormalizedTreeviewItem {
+  if (item.type === "Directory") {
+    return {
+      type: "Directory",
+      name: item.name,
+      path: item.path,
+      isExpanded: item.isExpanded,
+    };
+  }
+  return {
+    type: item.type,
+    name: item.name,
+    path: item.path,
+  };
+}
+
 const itemsReducer: Reducer<
   { [path: string]: NormalizedTreeviewItem },
   AppAction
@@ -48,6 +67,22 @@ const itemsReducer: Reducer<
           [string, NormalizedTreeviewItem],
         ],
       );
+    case ACTION_TREEVIEW_ITEM_UPDATE:
+      const updated = {
+        ...state,
+        [action.payload.path]: normalize(action.payload),
+      };
+      if (action.payload.type === "Directory") {
+        Object.assign(
+          updated,
+          Object.fromEntries(
+            recursiveNormalize(action.payload.children) as [
+              [string, NormalizedTreeviewItem],
+            ],
+          ),
+        );
+      }
+      return updated;
     default:
       return state;
   }
@@ -83,6 +118,14 @@ const directoryChildrenReducer: Reducer<
           [string, string[]],
         ],
       );
+    case ACTION_TREEVIEW_ITEM_UPDATE:
+      if (action.payload.type === "Directory") {
+        return {
+          ...state,
+          [action.payload.path]: action.payload.children.map((i) => i.path),
+        };
+      }
+      return state;
     default:
       return state;
   }

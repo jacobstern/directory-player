@@ -1,0 +1,17 @@
+.expand-button {
+  width: 20px;
+  height: 20px;
+  padding-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--secondary-fg);
+  font-size: 14px;
+}
+
+.expand-button__icon {
+  transition: transform 100ms ease;
+}
