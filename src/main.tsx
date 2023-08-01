@@ -2,12 +2,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { invoke } from "@tauri-apps/api";
-import { TreeviewView } from "./treeview/types";
+import "./styles.css";
+
 import { legacy_createStore as createStore } from "redux";
 import { Provider } from "react-redux";
 import { rootReducer } from "./rootReducer";
 import { treeviewInit } from "./treeview/actions";
-import "./styles.css";
+import { TreeviewView } from "./treeview/types";
 
 async function main() {
   const treeviewView = await invoke("treeview_get_view");

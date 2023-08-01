@@ -20,6 +20,9 @@ dependencies:
   redux:
     specifier: ^4.2.1
     version: 4.2.1
+  reselect:
+    specifier: ^4.1.8
+    version: 4.1.8
 
 devDependencies:
   '@tauri-apps/cli':
@@ -933,6 +936,10 @@ packages:
 
   /regenerator-runtime@0.13.11:
     resolution: {integrity: sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==}
+    dev: false
+
+  /reselect@4.1.8:
+    resolution: {integrity: sha512-ab9EmR80F/zQTMNeneUr4cv+jSwPJgIlvEmVwLerwrWVbpLlBuls9XHzIeTFy4cegU2NHBp3va0LKOzU5qFEYQ==}
     dev: false
 
   /rollup@3.27.0:
