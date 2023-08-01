@@ -13,8 +13,9 @@ export const throttle = <T extends unknown[]>(
     callback(...args);
     const interval = setInterval(() => {
       if (pending) {
-        callback(...pending);
+        const args = pending;
         pending = null;
+        callback(...args);
       } else {
         clearInterval(interval);
         timeoutActive = false;

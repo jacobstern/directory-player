@@ -68,29 +68,34 @@ fn treeview_get_view() -> TreeviewView {
 }
 
 #[tauri::command]
-fn treeview_expand_directory(client_path: String) -> TreeviewItem {
-    let path = Path::new(&client_path);
+fn treeview_expand_directory(directory_path: String) -> TreeviewItem {
+    let path = Path::new(&directory_path);
     let read = path.read_dir().unwrap();
     let listing = build_directory_listing(read);
     let name = path.file_name().unwrap().to_str().unwrap().to_owned();
     TreeviewItem::Directory {
         name,
-        path: client_path,
+        path: directory_path,
         children: listing,
         is_expanded: true,
     }
 }
 
 #[tauri::command]
-fn treeview_collapse_directory(client_path: String) -> TreeviewItem {
-    let path = Path::new(&client_path);
+fn treeview_collapse_directory(directory_path: String) -> TreeviewItem {
+    let path = Path::new(&directory_path);
     let name = path.file_name().unwrap().to_str().unwrap().to_owned();
     TreeviewItem::Directory {
         name,
-        path: client_path,
+        path: directory_path,
         children: vec![],
         is_expanded: false,
     }
+}
+
+#[tauri::command]
+fn player_start_playback(file_paths: Vec<String>) {
+    todo!();
 }
 
 #[tauri::command]
@@ -104,6 +109,7 @@ fn main() {
             treeview_get_view,
             treeview_expand_directory,
             treeview_collapse_directory,
+            player_start_playback,
             show_main_window
         ])
         .run(tauri::generate_context!())

@@ -2,7 +2,7 @@ import { AppState } from "../types";
 import { NormalizedTreeviewItem } from "./types";
 import { createSelector } from "reselect";
 
-export type FlatListingItem = { path: string; depth: number };
+export type FlatListingItem = { path: string; depth: number; canPlay: boolean };
 
 export const makeItemSelector = () => {
   const selectItem = createSelector(
@@ -22,8 +22,13 @@ function recursiveFlattenListing(
     .filter((path) => items[path] && !items[path].name.startsWith("."))
     .sort((a, b) => items[a].name.localeCompare(items[b].name));
   return sanitizedListing.flatMap((path) => {
+    let canPlay = false;
+    const item = items[path];
+    if (item && item.type === "File") {
+      canPlay = item.canPlay;
+    }
     if (directoryChildren[path] && directoryChildren[path].length) {
-      return [{ path, depth }].concat(
+      return [{ path, depth, canPlay }].concat(
         recursiveFlattenListing(
           directoryChildren[path],
           directoryChildren,
@@ -32,7 +37,7 @@ function recursiveFlattenListing(
         ),
       );
     }
-    return { path, depth };
+    return { path, depth, canPlay };
   });
 }
 

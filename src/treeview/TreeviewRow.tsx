@@ -9,6 +9,7 @@ export interface TreeviewRowProps {
   depth: number;
   onExpandDirectory: (path: string) => void;
   onCollapseDirectory: (path: string) => void;
+  onPlayback: (path: string) => void;
 }
 
 function TreeviewRow({
@@ -16,6 +17,7 @@ function TreeviewRow({
   depth,
   onExpandDirectory,
   onCollapseDirectory,
+  onPlayback,
 }: TreeviewRowProps) {
   const selectItem = useMemo(makeItemSelector, []);
   const item = useSelector((state: AppState) => selectItem(state, path));
@@ -26,6 +28,9 @@ function TreeviewRow({
   const handleCollapseDirectory = useCallback(() => {
     onCollapseDirectory(path);
   }, [path, onCollapseDirectory]);
+  const handlePlayback = useCallback(() => {
+    onPlayback(path);
+  }, [path, onPlayback]);
 
   if (item.type === "Directory") {
     return (
@@ -37,6 +42,7 @@ function TreeviewRow({
         depth={depth}
         onExpandDirectory={handleExpandDirectory}
         onCollapseDirectory={handleCollapseDirectory}
+        onPlayback={handlePlayback}
       />
     );
   }
@@ -47,6 +53,7 @@ function TreeviewRow({
       name={item.name}
       depth={depth}
       canPlay={item.canPlay}
+      onPlayback={handlePlayback}
     />
   );
 }

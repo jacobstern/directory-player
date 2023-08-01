@@ -13,6 +13,7 @@ export interface RowListItemProps {
   depth: number;
   onExpandDirectory?: VoidFunction;
   onCollapseDirectory?: VoidFunction;
+  onPlayback?: VoidFunction;
 }
 
 function RowListItem({
@@ -23,12 +24,19 @@ function RowListItem({
   isExpanded,
   onExpandDirectory,
   onCollapseDirectory,
+  onPlayback,
 }: RowListItemProps) {
   const handleToggle = () => {
     if (isExpanded) {
       onCollapseDirectory?.();
     } else {
       onExpandDirectory?.();
+    }
+  };
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (canPlay) {
+      onPlayback?.();
     }
   };
 
@@ -39,7 +47,7 @@ function RowListItem({
     paddingLeft: depth * 8,
   };
   return (
-    <li className="row-list-item">
+    <li className="row-list-item" onDoubleClick={handleDoubleClick}>
       <div className="row-list-item__first-col" style={firstColStyle}>
         {type === "Directory" && (
           <ExpandButton isExpanded={isExpanded} onToggle={handleToggle} />
