@@ -18,6 +18,7 @@ function recursiveFlattenListing(
   items: { [path: string]: NormalizedTreeviewItem },
   depth: number,
 ): FlatListingItem[] {
+  // TODO: Filter and sort on the server
   const sanitizedListing = listing
     .filter((path) => items[path] && !items[path].name.startsWith("."))
     .sort((a, b) => items[a].name.localeCompare(items[b].name));

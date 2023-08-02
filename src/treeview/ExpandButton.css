@@ -5,9 +5,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  appearance: none;
-  border: none;
-  background: none;
   color: var(--secondary-fg);
   font-size: 14px;
 }

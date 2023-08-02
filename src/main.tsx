@@ -1,6 +1,6 @@
-import "./css/vendor/reset.css";
-import "./css/vars.css"; // Before main.css
-import "./main.css";
+import "./styles/reset.css";
+import "./styles/vars.css";
+import "./styles.css";
 
 import React from "react";
 import ReactDOM from "react-dom/client";

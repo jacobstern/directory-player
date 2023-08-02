@@ -74,6 +74,9 @@ const itemsReducer: Reducer<
           updated,
           Object.fromEntries(
             recursiveNormalize(action.payload.children) as [
+              // Typing for Object.fromEntries() is actually incorrect, it just
+              // needsd to have "0" and "1" properties. Not using tuples avoids
+              // any potential problem with Array.flatMap().
               [string, NormalizedTreeviewItem],
             ],
           ),

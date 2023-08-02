@@ -31,6 +31,7 @@ struct TreeviewView {
 }
 
 fn build_directory_listing(read: ReadDir) -> Vec<TreeviewItem> {
+    // TODO: Handle and surface IO errors
     let mut listing: Vec<TreeviewItem> = Vec::new();
     for result in read {
         if let Ok(entry) = result {
@@ -94,6 +95,16 @@ fn treeview_collapse_directory(directory_path: String) -> TreeviewItem {
 }
 
 #[tauri::command]
+fn player_play() {
+    todo!();
+}
+
+#[tauri::command]
+fn player_pause() {
+    todo!();
+}
+
+#[tauri::command]
 fn player_start_playback(file_paths: Vec<String>) {
     todo!();
 }
@@ -109,6 +120,8 @@ fn main() {
             treeview_get_view,
             treeview_expand_directory,
             treeview_collapse_directory,
+            player_play,
+            player_pause,
             player_start_playback,
             show_main_window
         ])

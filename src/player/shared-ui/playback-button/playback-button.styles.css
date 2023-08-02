@@ -1,0 +1,14 @@
+.playback-button {
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 15px;
+  color: var(--intermediate-fg);
+}
+
+.playback-button:hover {
+  background-color: var(--hover-bg);
+}

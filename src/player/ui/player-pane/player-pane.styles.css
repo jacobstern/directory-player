@@ -1,0 +1,16 @@
+.player-pane {
+  display: flex;
+  justify-content: center;
+}
+
+.player-pane__controls {
+  display: grid;
+  grid-template-rows: [playback-controls] auto;
+  max-width: 800px;
+}
+
+.player-pane__playback-buttons {
+  grid-row-start: playback-controls;
+  grid-row-end: playback-controls;
+  display: flex;
+}

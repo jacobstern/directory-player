@@ -27,6 +27,7 @@ function TreeviewListing() {
   const dispatch = useDispatch();
   const flatListing = useSelector(selectFlatListing);
 
+  // TODO: Move to TreeviewRow
   const handleExpandDirectory = useCallback(
     async (path: string) => {
       const result = await invoke("treeview_expand_directory", {
