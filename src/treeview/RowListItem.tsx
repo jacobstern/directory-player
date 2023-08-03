@@ -34,7 +34,7 @@ function RowListItem({
       onExpandDirectory?.();
     }
   };
-  const handleDoubleClick = (e: React.MouseEvent) => {
+  const handleDoubleClick: React.MouseEventHandler = (e) => {
     e.preventDefault();
     if (canPlay) {
       onPlayback?.();
