@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 
 import "./TreeviewListing.css";
 import { selectFlatListing } from "./selectors";
@@ -17,6 +17,7 @@ import { TreeviewItem } from "./types";
 import { invoke } from "@tauri-apps/api";
 import { throttle } from "../utils/throttle";
 import { getPlaybackItems } from "./helpers";
+import { AppAction, AppState } from "../types";
 
 const LIST_ITEM_HEIGHT = 26;
 const SCROLL_BUFFER = 500;
@@ -24,36 +25,45 @@ const SCROLL_THROTTLE_MS = 50;
 const RESIZE_THROTTLE_MS = 100;
 
 function TreeviewListing() {
+  const { getState } = useStore<AppState, AppAction>(); // For playback start action
   const dispatch = useDispatch();
   const flatListing = useSelector(selectFlatListing);
 
   // TODO: Move to TreeviewRow
   const handleExpandDirectory = useCallback(
     async (path: string) => {
-      const result = await invoke("treeview_expand_directory", {
+      const result = await invoke<TreeviewItem>("treeview_expand_directory", {
         directoryPath: path,
       });
-      dispatch(treeviewItemUpdate(result as TreeviewItem));
+      dispatch(treeviewItemUpdate(result));
     },
     [dispatch],
   );
   const handleCollapseDirectory = useCallback(
     async (path: string) => {
-      const result = await invoke("treeview_collapse_directory", {
+      const result = await invoke<TreeviewItem>("treeview_collapse_directory", {
         directoryPath: path,
       });
-      dispatch(treeviewItemUpdate(result as TreeviewItem));
+      dispatch(treeviewItemUpdate(result));
     },
     [dispatch],
   );
   const handlePlayback = useCallback(
     async (path: string) => {
-      const paths = getPlaybackItems(path, flatListing);
+      const state = getState();
+      const {
+        treeview: { items: normalizedItems },
+      } = state;
+      const paths = getPlaybackItems(
+        path,
+        selectFlatListing(state),
+        normalizedItems,
+      );
       if (paths.length > 0) {
         await invoke("player_start_playback", { filePaths: paths });
       }
     },
-    [flatListing],
+    [getState],
   );
 
   // TODO: Virtualization in a different component

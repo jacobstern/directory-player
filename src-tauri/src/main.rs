@@ -3,7 +3,7 @@
 
 use serde;
 use serde::Serialize;
-use std::fs::ReadDir;
+use std::fs::{DirEntry, ReadDir};
 use std::path::Path;
 use tauri::Manager;
 
@@ -30,33 +30,71 @@ struct TreeviewView {
     listing: Vec<TreeviewItem>,
 }
 
-fn build_directory_listing(read: ReadDir) -> Vec<TreeviewItem> {
+struct FileNameAndPath {
+    name: String,
+    path: String,
+}
+
+fn parse_name_and_path(entry: &DirEntry) -> Option<FileNameAndPath> {
+    let name = entry.file_name().to_str()?.to_owned();
+    let path = entry.path().to_str()?.to_owned();
+    Some(FileNameAndPath { name, path })
+}
+
+fn treeview_item_name_and_path(item: &TreeviewItem) -> FileNameAndPath {
+    match item {
+        TreeviewItem::Directory { name, path, .. } => FileNameAndPath {
+            name: name.clone(),
+            path: path.clone(),
+        },
+        TreeviewItem::File { name, path, .. } => FileNameAndPath {
+            name: name.clone(),
+            path: path.clone(),
+        },
+    }
+}
+
+fn build_directory_listing(entries: ReadDir) -> Vec<TreeviewItem> {
     // TODO: Handle and surface IO errors
     let mut listing: Vec<TreeviewItem> = Vec::new();
-    for result in read {
-        if let Ok(entry) = result {
+    for entry in entries {
+        if let Ok(entry) = entry {
             if let Ok(file_type) = entry.file_type() {
                 if file_type.is_dir() {
-                    listing.push(TreeviewItem::Directory {
-                        name: entry.file_name().to_str().unwrap().to_owned(),
-                        path: entry.path().to_str().unwrap().to_owned(),
-                        children: vec![],
-                        is_expanded: false,
-                    });
+                    let parsed = parse_name_and_path(&entry);
+                    if let Some(FileNameAndPath { name, path }) = parsed {
+                        listing.push(TreeviewItem::Directory {
+                            name,
+                            path,
+                            children: vec![],
+                            is_expanded: false,
+                        });
+                    }
                 } else if file_type.is_file() {
-                    let name = entry.file_name().to_str().unwrap().to_owned();
-                    let can_play = vec![".mp3", ".flac", ".wav"]
-                        .iter()
-                        .any(|ext| name.ends_with(ext));
-                    listing.push(TreeviewItem::File {
-                        name,
-                        path: entry.path().to_str().unwrap().to_owned(),
-                        can_play,
-                    });
+                    let parsed = parse_name_and_path(&entry);
+                    if let Some(FileNameAndPath { name, path }) = parsed {
+                        if name.starts_with(".") {
+                            continue;
+                        }
+                        let can_play = [".mp3", ".flac", ".wav", ".ogg"]
+                            .iter()
+                            .any(|ext| name.ends_with(ext));
+                        listing.push(TreeviewItem::File {
+                            name,
+                            path,
+                            can_play,
+                        });
+                    }
                 }
             }
         }
     }
+    listing.sort_unstable_by(|a, b| {
+        treeview_item_name_and_path(&a)
+            .name
+            .partial_cmp(&treeview_item_name_and_path(&b).name)
+            .unwrap()
+    });
     listing
 }
 
@@ -115,6 +153,9 @@ async fn show_main_window(window: tauri::Window) {
 }
 
 fn main() {
+    gstreamer::init().expect("failed to initialize GStreamer");
+    println!("{}", gstreamer::version_string());
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             treeview_get_view,

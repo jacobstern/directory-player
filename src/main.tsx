@@ -14,10 +14,10 @@ import { treeviewInit } from "./treeview/actions";
 import { TreeviewView } from "./treeview/types";
 
 async function main() {
-  const treeviewView = await invoke("treeview_get_view");
+  const treeviewView = await invoke<TreeviewView>("treeview_get_view");
 
   const store = createStore(rootReducer);
-  store.dispatch(treeviewInit(treeviewView as TreeviewView));
+  store.dispatch(treeviewInit(treeviewView));
 
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>

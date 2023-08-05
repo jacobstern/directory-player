@@ -3,7 +3,13 @@ import {
   ACTION_TREEVIEW_INIT,
   ACTION_TREEVIEW_ITEM_UPDATE,
 } from "./actionTypes";
-import { NormalizedTreeviewItem, TreeviewItem, TreeviewState } from "./types";
+import {
+  NormalizedDirectoryChildren,
+  NormalizedItems,
+  NormalizedTreeviewItem,
+  TreeviewItem,
+  TreeviewState,
+} from "./types";
 import { combineReducers } from "redux";
 import type { Reducer } from "redux";
 
@@ -53,10 +59,10 @@ function normalize(item: TreeviewItem): NormalizedTreeviewItem {
   return item;
 }
 
-const itemsReducer: Reducer<
-  { [path: string]: NormalizedTreeviewItem },
-  AppAction
-> = (state = {}, action) => {
+const itemsReducer: Reducer<NormalizedItems, AppAction> = (
+  state = {},
+  action,
+) => {
   switch (action.type) {
     case ACTION_TREEVIEW_INIT:
       return Object.fromEntries(
@@ -110,7 +116,7 @@ function recursiveNormalizeChildren(
 }
 
 const directoryChildrenReducer: Reducer<
-  { [path: string]: string[] },
+  NormalizedDirectoryChildren,
   AppAction
 > = (state = {}, action) => {
   switch (action.type) {

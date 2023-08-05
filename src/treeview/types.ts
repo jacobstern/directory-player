@@ -21,8 +21,12 @@ export type NormalizedTreeviewItem = TreeviewFile | NormalizedTreeviewDirectory;
 
 export type TreeviewView = { listing: TreeviewItem[] };
 
+export type NormalizedItems = { [path: string]: NormalizedTreeviewItem };
+
+export type NormalizedDirectoryChildren = { [path: string]: string[] };
+
 export type TreeviewState = {
   listing: string[];
-  items: { [path: string]: NormalizedTreeviewItem };
-  directoryChildren: { [path: string]: string[] };
+  items: NormalizedItems;
+  directoryChildren: NormalizedDirectoryChildren;
 };
