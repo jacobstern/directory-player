@@ -127,16 +127,3 @@ table {
   border-collapse: collapse;
   border-spacing: 0;
 }
-
-/* New additions below this line */
-
-button {
-  appearance: none;
-  border: none;
-  background: none;
-  margin: 0;
-  padding: 0;
-  font-size: 100%;
-  font: inherit;
-  color: inherit;
-}

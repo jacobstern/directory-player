@@ -1,12 +1,25 @@
 .playback-button {
+  /* Reset */
+  appearance: none;
+  border: none;
+  background: none;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+
   width: 32px;
-  height: 32px;
+  height: 28px;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   font-size: 16px;
-  color: var(--icon-button-fg);
+  border-radius: 5px;
+  color: var(--duller-fg);
+}
+
+.playback-button + .playback-button {
+  margin-left: 4px;
 }
 
 .playback-button:hover {

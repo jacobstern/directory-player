@@ -1,6 +1,7 @@
 .treeview-listing {
   flex-grow: 1;
   overflow-y: auto;
+  padding-top: 6px;
 }
 
 .treeview-listing__container {

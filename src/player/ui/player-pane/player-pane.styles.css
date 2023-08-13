@@ -1,6 +1,9 @@
 .player-pane {
   display: flex;
   justify-content: center;
+  padding: 8px 0;
+  background-color: #222222;
+  border-bottom: 1px solid #202020;
 }
 
 .player-pane__controls {

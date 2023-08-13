@@ -6,7 +6,10 @@ export interface ExpandButtonProps {
   onToggle: VoidFunction;
 }
 
-function ExpandButton({ isExpanded, onToggle }: ExpandButtonProps) {
+export default function ExpandButton({
+  isExpanded,
+  onToggle,
+}: ExpandButtonProps) {
   const icon = useMemo(
     () => (
       <svg
@@ -39,5 +42,3 @@ function ExpandButton({ isExpanded, onToggle }: ExpandButtonProps) {
     </button>
   );
 }
-
-export default ExpandButton;

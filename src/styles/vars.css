@@ -7,9 +7,9 @@
   :root {
     --main-fg: #f6f6f6;
     --main-bg: #2f2f2f;
-    --hover-bg: #383838;
+    --hover-bg: rgba(255, 255, 255, 0.065);
     --secondary-fg: #98989d;
     --accent-fg: #7fce95;
-    --icon-button-fg: #d0d0d3;
+    --duller-fg: #d0d0d3;
   }
 }

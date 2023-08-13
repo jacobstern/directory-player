@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde;
 use serde::Serialize;
 use std::fs::{DirEntry, ReadDir};
 use std::path::Path;
@@ -35,9 +34,9 @@ struct FileNameAndPath {
     path: String,
 }
 
-fn parse_name_and_path(entry: &DirEntry) -> Option<FileNameAndPath> {
-    let name = entry.file_name().to_str()?.to_owned();
+fn get_utf8_name_and_path(entry: &DirEntry) -> Option<FileNameAndPath> {
     let path = entry.path().to_str()?.to_owned();
+    let name = entry.file_name().to_str()?.to_owned();
     Some(FileNameAndPath { name, path })
 }
 
@@ -57,43 +56,40 @@ fn treeview_item_name_and_path(item: &TreeviewItem) -> FileNameAndPath {
 fn build_directory_listing(entries: ReadDir) -> Vec<TreeviewItem> {
     // TODO: Handle and surface IO errors
     let mut listing: Vec<TreeviewItem> = Vec::new();
-    for entry in entries {
-        if let Ok(entry) = entry {
-            if let Ok(file_type) = entry.file_type() {
-                if file_type.is_dir() {
-                    let parsed = parse_name_and_path(&entry);
-                    if let Some(FileNameAndPath { name, path }) = parsed {
-                        listing.push(TreeviewItem::Directory {
-                            name,
-                            path,
-                            children: vec![],
-                            is_expanded: false,
-                        });
+    for entry in entries.flatten() {
+        if let Ok(file_type) = entry.file_type() {
+            if file_type.is_dir() {
+                let valid = get_utf8_name_and_path(&entry);
+                if let Some(FileNameAndPath { name, path }) = valid {
+                    listing.push(TreeviewItem::Directory {
+                        name,
+                        path,
+                        children: vec![],
+                        is_expanded: false,
+                    });
+                }
+            } else if file_type.is_file() {
+                let parsed = get_utf8_name_and_path(&entry);
+                if let Some(FileNameAndPath { name, path }) = parsed {
+                    if name.starts_with('.') {
+                        continue;
                     }
-                } else if file_type.is_file() {
-                    let parsed = parse_name_and_path(&entry);
-                    if let Some(FileNameAndPath { name, path }) = parsed {
-                        if name.starts_with(".") {
-                            continue;
-                        }
-                        let can_play = [".mp3", ".flac", ".wav", ".ogg"]
-                            .iter()
-                            .any(|ext| name.ends_with(ext));
-                        listing.push(TreeviewItem::File {
-                            name,
-                            path,
-                            can_play,
-                        });
-                    }
+                    let can_play = [".mp3", ".flac", ".wav", ".ogg"]
+                        .iter()
+                        .any(|ext| name.ends_with(ext));
+                    listing.push(TreeviewItem::File {
+                        name,
+                        path,
+                        can_play,
+                    });
                 }
             }
         }
     }
     listing.sort_unstable_by(|a, b| {
-        treeview_item_name_and_path(&a)
+        treeview_item_name_and_path(a)
             .name
-            .partial_cmp(&treeview_item_name_and_path(&b).name)
-            .unwrap()
+            .cmp(&treeview_item_name_and_path(b).name)
     });
     listing
 }
@@ -101,16 +97,16 @@ fn build_directory_listing(entries: ReadDir) -> Vec<TreeviewItem> {
 #[tauri::command]
 fn treeview_get_view() -> TreeviewView {
     let path = Path::new("/Users/jacob/Library/CloudStorage/OneDrive-Personal/Music");
-    let read = path.read_dir().unwrap();
-    let listing = build_directory_listing(read);
+    let entries = path.read_dir().unwrap();
+    let listing = build_directory_listing(entries);
     TreeviewView { listing }
 }
 
 #[tauri::command]
 fn treeview_expand_directory(directory_path: String) -> TreeviewItem {
     let path = Path::new(&directory_path);
-    let read = path.read_dir().unwrap();
-    let listing = build_directory_listing(read);
+    let entries = path.read_dir().unwrap();
+    let listing = build_directory_listing(entries);
     let name = path.file_name().unwrap().to_str().unwrap().to_owned();
     TreeviewItem::Directory {
         name,

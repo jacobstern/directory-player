@@ -1,5 +1,4 @@
 import {
-  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -24,7 +23,7 @@ const SCROLL_BUFFER = 500;
 const SCROLL_THROTTLE_MS = 50;
 const RESIZE_THROTTLE_MS = 100;
 
-function TreeviewListing() {
+export default function TreeviewListing() {
   const { getState } = useStore<AppState, AppAction>(); // For playback start action
   const dispatch = useDispatch();
   const flatListing = useSelector(selectFlatListing);
@@ -151,5 +150,3 @@ function TreeviewListing() {
     </div>
   );
 }
-
-export default memo(TreeviewListing);

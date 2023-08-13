@@ -15,7 +15,7 @@ export interface ControlsButtonProps {
   onClick?: VoidFunction;
 }
 
-function PlaybackButton({
+export default function PlaybackButton({
   onClick,
   title,
   disabled,
@@ -67,5 +67,3 @@ function PlaybackButton({
     </button>
   );
 }
-
-export default PlaybackButton;

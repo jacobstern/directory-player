@@ -1,4 +1,12 @@
 .expand-button {
+  /* Reset */
+  appearance: none;
+  border: none;
+  background: none;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+
   width: 20px;
   height: 20px;
   padding-top: 2px;

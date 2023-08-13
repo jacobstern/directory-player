@@ -7,7 +7,7 @@ export interface FileIconProps {
   type: FileIconType;
 }
 
-function FileIcon({ type }: FileIconProps) {
+export default function FileIcon({ type }: FileIconProps) {
   const icon = useMemo(() => {
     switch (type) {
       case "MusicFile":
@@ -51,5 +51,3 @@ function FileIcon({ type }: FileIconProps) {
   }, [type]);
   return <i className="file-icon">{icon}</i>;
 }
-
-export default FileIcon;
