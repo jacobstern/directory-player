@@ -2,8 +2,9 @@
   display: flex;
   justify-content: center;
   padding: 8px 0;
-  background-color: #222222;
-  border-bottom: 1px solid #202020;
+  background-color: #202020;
+  box-shadow: 0 0 20px #202026;
+  z-index: 1;
 }
 
 .player-pane__controls {

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api";
-import PlaybackButton from "../../shared-ui/playback-button";
+import PlaybackButton from "../../../shared-ui/playback-button";
 
 export default function PauseButton() {
   const handleClick = async () => {

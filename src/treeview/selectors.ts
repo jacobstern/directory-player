@@ -7,7 +7,7 @@ export type FlatListingItem = { path: string; depth: number };
 export const makeItemSelector = () => {
   const selectItem = createSelector(
     [(state: AppState) => state.treeview.items, (_state, path: string) => path],
-    (items, path) => items[path],
+    (items, path) => items[path]!,
   );
   return selectItem;
 };
@@ -19,10 +19,11 @@ function recursiveFlattenListing(
   depth: number,
 ): FlatListingItem[] {
   return listing.flatMap((path) => {
-    if (directoryChildren[path] && directoryChildren[path].length) {
+    const children = directoryChildren[path];
+    if (children?.length) {
       return [{ path, depth }].concat(
         recursiveFlattenListing(
-          directoryChildren[path],
+          children,
           directoryChildren,
           items,
           depth + 1,

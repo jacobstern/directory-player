@@ -1,9 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod player;
+
+use player::Player;
 use serde::Serialize;
 use std::fs::{DirEntry, ReadDir};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -28,6 +32,8 @@ enum TreeviewItem {
 struct TreeviewView {
     listing: Vec<TreeviewItem>,
 }
+
+struct PlayerState(Arc<Mutex<Player>>);
 
 struct FileNameAndPath {
     name: String,
@@ -139,8 +145,8 @@ fn player_pause() {
 }
 
 #[tauri::command]
-fn player_start_playback(file_paths: Vec<String>) {
-    todo!();
+fn player_start_playback(file_paths: Vec<String>, player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().start_playback(&file_paths);
 }
 
 #[tauri::command]
@@ -149,10 +155,9 @@ async fn show_main_window(window: tauri::Window) {
 }
 
 fn main() {
-    gstreamer::init().expect("failed to initialize GStreamer");
-    println!("{}", gstreamer::version_string());
-
+    let player = Player::new();
     tauri::Builder::default()
+        .manage(PlayerState(Arc::new(Mutex::new(player))))
         .invoke_handler(tauri::generate_handler![
             treeview_get_view,
             treeview_expand_directory,
