@@ -19,8 +19,8 @@ import { getPlaybackItems } from "./helpers";
 import { AppAction, AppState } from "../types";
 
 const LIST_ITEM_HEIGHT = 26;
-const SCROLL_BUFFER = 500;
-const SCROLL_THROTTLE_MS = 50;
+const SCROLL_BUFFER = 300;
+const SCROLL_THROTTLE_MS = 25;
 const RESIZE_THROTTLE_MS = 100;
 
 export default function TreeviewListing() {

@@ -156,8 +156,9 @@ async fn show_main_window(window: tauri::Window) {
 
 fn main() {
     let player = Player::new();
+    let shared_player = Arc::new(Mutex::new(player));
     tauri::Builder::default()
-        .manage(PlayerState(Arc::new(Mutex::new(player))))
+        .manage(PlayerState(shared_player))
         .invoke_handler(tauri::generate_handler![
             treeview_get_view,
             treeview_expand_directory,
