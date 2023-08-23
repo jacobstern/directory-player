@@ -1,4 +1,11 @@
-use std::thread;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
 
 use creek::{Decoder, ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
 use log::warn;
@@ -25,30 +32,69 @@ pub enum ProcessToGuiMsg {
 enum ManagerCommand {
     StartPlayback(String),
     Pause,
+    PlaybackPos(usize),
+    Buffering,
 }
 
 struct PlaybackManager {
     stream: cpal::Stream,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
+    from_process_rx: rtrb::Consumer<ProcessToGuiMsg>,
+    command_tx: mpsc::Sender<ManagerCommand>,
     command_rx: mpsc::Receiver<ManagerCommand>,
     stream_frame_count: Option<usize>,
+    cache_size: usize,
 }
 
 impl PlaybackManager {
-    pub fn new(command_rx: mpsc::Receiver<ManagerCommand>) -> PlaybackManager {
-        let (to_gui_tx, _from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
+    pub fn new(
+        command_tx: mpsc::Sender<ManagerCommand>,
+        command_rx: mpsc::Receiver<ManagerCommand>,
+    ) -> PlaybackManager {
+        let (to_gui_tx, from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
         let (to_process_tx, from_gui_rx) = RingBuffer::<GuiToProcessMsg>::new(64);
         let cpal_stream = output::start_stream(to_gui_tx, from_gui_rx);
 
         PlaybackManager {
             stream: cpal_stream,
             to_process_tx,
+            from_process_rx,
+            command_tx,
             command_rx,
             stream_frame_count: None,
+            cache_size: 0,
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(mut self) {
+        let mut from_process_rx = self.from_process_rx;
+
+        thread::spawn({
+            let tx = self.command_tx.clone();
+            move || {
+                let mut failed_to_send = false;
+                while !failed_to_send {
+                    while let Ok(msg) = from_process_rx.pop() {
+                        match msg {
+                            ProcessToGuiMsg::Buffering => {
+                                if tx.send(ManagerCommand::Buffering).is_err() {
+                                    failed_to_send = true;
+                                    break;
+                                }
+                            }
+                            ProcessToGuiMsg::PlaybackPos(pos) => {
+                                if tx.send(ManagerCommand::PlaybackPos(pos)).is_err() {
+                                    failed_to_send = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        });
+
         while let Ok(msg) = self.command_rx.recv() {
             match msg {
                 ManagerCommand::StartPlayback(file_path) => {
@@ -71,8 +117,7 @@ impl PlaybackManager {
                         ..Default::default()
                     };
 
-                    // This is how to calculate the total size of a cache block.
-                    let cache_size = opts.num_cache_blocks * SymphoniaDecoder::DEFAULT_BLOCK_SIZE;
+                    self.cache_size = opts.num_cache_blocks * SymphoniaDecoder::DEFAULT_BLOCK_SIZE;
 
                     // Open the read stream.
                     let mut read_stream =
@@ -102,6 +147,8 @@ impl PlaybackManager {
                     .unwrap_or_else(|_| {
                         warn!("Failed to send pause message to audio thread");
                     }),
+                ManagerCommand::Buffering => {}
+                ManagerCommand::PlaybackPos(_pos) => {}
             }
         }
     }
@@ -116,7 +163,10 @@ pub struct Player {
 impl Player {
     pub fn new() -> Player {
         let (command_tx, rx) = mpsc::channel();
-        thread::spawn(move || PlaybackManager::new(rx).run());
+        thread::spawn({
+            let tx = command_tx.clone();
+            move || PlaybackManager::new(tx, rx).run()
+        });
         Player { command_tx }
     }
 
