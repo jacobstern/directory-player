@@ -27,6 +27,7 @@ pub enum GuiToProcessMsg {
 pub enum ProcessToGuiMsg {
     PlaybackPos(usize),
     Buffering,
+    PlaybackEnded,
 }
 
 enum ManagerCommand {
@@ -88,10 +89,13 @@ impl PlaybackManager {
                                     break;
                                 }
                             }
+                            ProcessToGuiMsg::PlaybackEnded => {
+                                println!("Playback ended");
+                            }
                         }
                     }
+                    thread::sleep(Duration::from_millis(10));
                 }
-                thread::sleep(Duration::from_millis(10));
             }
         });
 

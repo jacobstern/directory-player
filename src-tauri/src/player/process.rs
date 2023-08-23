@@ -20,9 +20,6 @@ pub struct Process {
     playback_state: PlaybackState,
     had_cache_miss_last_cycle: bool,
 
-    loop_start: usize,
-    loop_end: usize,
-
     gain: f32,
 
     fatal_error: bool,
@@ -41,10 +38,7 @@ impl Process {
             playback_state: PlaybackState::Paused,
             had_cache_miss_last_cycle: false,
 
-            loop_start: 0,
-            loop_end: 0,
-
-            gain: 0.1,
+            gain: 0.17,
 
             fatal_error: false,
         }
@@ -75,8 +69,6 @@ impl Process {
             match msg {
                 GuiToProcessMsg::StartPlayback(read_disk_stream) => {
                     self.playback_state = PlaybackState::Paused;
-                    self.loop_start = 0;
-                    self.loop_end = 0;
                     self.read_disk_stream = Some(read_disk_stream);
                     self.playback_state = PlaybackState::Playing;
                 }
@@ -85,21 +77,9 @@ impl Process {
                 }
                 GuiToProcessMsg::Stop => {
                     self.playback_state = PlaybackState::Paused;
-
-                    if let Some(read_disk_stream) = &mut self.read_disk_stream {
-                        read_disk_stream.seek(self.loop_start, SeekMode::Auto)?;
-
-                        let _ = self
-                            .to_gui_tx
-                            .push(ProcessToGuiMsg::PlaybackPos(read_disk_stream.playhead()));
-                    }
                 }
                 GuiToProcessMsg::Restart => {
                     self.playback_state = PlaybackState::Playing;
-
-                    if let Some(read_disk_stream) = &mut self.read_disk_stream {
-                        read_disk_stream.seek(self.loop_start, SeekMode::Auto)?;
-                    }
                 }
                 GuiToProcessMsg::SeekTo(pos) => {
                     if let Some(read_disk_stream) = &mut self.read_disk_stream {
@@ -127,76 +107,48 @@ impl Process {
                 return Ok(());
             }
 
-            let num_frames = read_disk_stream.info().num_frames;
             let num_channels = usize::from(read_disk_stream.info().num_channels);
+            let mut reached_end_of_file = false;
 
-            // Keep reading data until output buffer is filled.
             while data.len() >= num_channels {
                 let read_frames = data.len() / 2;
-
-                let mut playhead = read_disk_stream.playhead();
-
-                // If user seeks ahead of the loop end, continue playing until the end
-                // of the file.
-                let loop_end = if playhead < self.loop_end {
-                    self.loop_end
-                } else {
-                    num_frames
-                };
-
+                // NOTE: Might want to report doc bug for this function
                 let read_data = read_disk_stream.read(read_frames)?;
 
-                playhead += read_data.num_frames();
-                if playhead >= loop_end {
-                    // Copy up to the end of the loop.
-                    let to_end_of_loop = read_data.num_frames() - (playhead - loop_end);
+                if read_data.num_channels() == 1 {
+                    let ch = read_data.read_channel(0);
 
-                    if read_data.num_channels() == 1 {
-                        let ch = read_data.read_channel(0);
-
-                        for i in 0..to_end_of_loop {
-                            data[i * 2] = ch[i] * self.gain;
-                            data[i * 2 + 1] = ch[i] * self.gain;
-                        }
-                    } else if read_data.num_channels() == 2 {
-                        let ch1 = read_data.read_channel(0);
-                        let ch2 = read_data.read_channel(1);
-
-                        for i in 0..to_end_of_loop {
-                            data[i * 2] = ch1[i] * self.gain;
-                            data[i * 2 + 1] = ch2[i] * self.gain;
-                        }
+                    for i in 0..read_data.num_frames() {
+                        data[i * 2] = ch[i] * self.gain;
+                        data[i * 2 + 1] = ch[i] * self.gain;
                     }
+                } else if read_data.num_channels() == 2 {
+                    let ch1 = read_data.read_channel(0);
+                    let ch2 = read_data.read_channel(1);
 
-                    read_disk_stream.seek(self.loop_start, SeekMode::Auto)?;
-
-                    data = &mut data[to_end_of_loop * 2..];
-                } else {
-                    // Else copy all the read data.
-                    if read_data.num_channels() == 1 {
-                        let ch = read_data.read_channel(0);
-
-                        for i in 0..read_data.num_frames() {
-                            data[i * 2] = ch[i] * self.gain;
-                            data[i * 2 + 1] = ch[i] * self.gain;
-                        }
-                    } else if read_data.num_channels() == 2 {
-                        let ch1 = read_data.read_channel(0);
-                        let ch2 = read_data.read_channel(1);
-
-                        for i in 0..read_data.num_frames() {
-                            data[i * 2] = ch1[i] * self.gain;
-                            data[i * 2 + 1] = ch2[i] * self.gain;
-                        }
+                    for i in 0..read_data.num_frames() {
+                        data[i * 2] = ch1[i] * self.gain;
+                        data[i * 2 + 1] = ch2[i] * self.gain;
                     }
-
-                    data = &mut data[read_data.num_frames() * 2..];
                 }
+
+                if read_data.reached_end_of_file() {
+                    self.playback_state = PlaybackState::Paused;
+                    reached_end_of_file = true;
+                    break;
+                }
+
+                data = &mut data[read_data.num_frames() * 2..];
             }
 
-            let _ = self
-                .to_gui_tx
-                .push(ProcessToGuiMsg::PlaybackPos(read_disk_stream.playhead()));
+            // Fill silence if we have reached the end of the stream
+            silence(data);
+
+            let _ = self.to_gui_tx.push(if reached_end_of_file {
+                ProcessToGuiMsg::PlaybackEnded
+            } else {
+                ProcessToGuiMsg::PlaybackPos(read_disk_stream.playhead())
+            });
         } else {
             // Output silence until file is received.
             silence(data);
