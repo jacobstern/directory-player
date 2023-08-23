@@ -4,7 +4,7 @@ use rtrb::{Consumer, Producer};
 use crate::player::process::Process;
 use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
 
-pub fn create_stream(
+pub fn start_stream(
     to_gui_tx: Producer<ProcessToGuiMsg>,
     from_gui_rx: Consumer<GuiToProcessMsg>,
 ) -> cpal::Stream {

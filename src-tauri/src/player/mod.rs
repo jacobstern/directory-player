@@ -1,11 +1,4 @@
-use std::{
-    collections::VecDeque,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-    thread,
-};
+use std::thread;
 
 use creek::{Decoder, ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
 use log::warn;
@@ -17,8 +10,7 @@ mod process;
 
 #[allow(clippy::large_enum_variant)]
 pub enum GuiToProcessMsg {
-    UseStream(ReadDiskStream<SymphoniaDecoder>),
-    PlayResume,
+    StartPlayback(ReadDiskStream<SymphoniaDecoder>),
     Pause,
     Stop,
     Restart,
@@ -31,32 +23,35 @@ pub enum ProcessToGuiMsg {
 }
 
 enum ManagerCommand {
-    Play(String),
+    StartPlayback(String),
+    Pause,
 }
 
 struct PlaybackManager {
     stream: cpal::Stream,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
     command_rx: mpsc::Receiver<ManagerCommand>,
+    stream_frame_count: Option<usize>,
 }
 
 impl PlaybackManager {
     pub fn new(command_rx: mpsc::Receiver<ManagerCommand>) -> PlaybackManager {
         let (to_gui_tx, _from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
         let (to_process_tx, from_gui_rx) = RingBuffer::<GuiToProcessMsg>::new(64);
-        let cpal_stream = output::create_stream(to_gui_tx, from_gui_rx);
+        let cpal_stream = output::start_stream(to_gui_tx, from_gui_rx);
 
         PlaybackManager {
             stream: cpal_stream,
             to_process_tx,
             command_rx,
+            stream_frame_count: None,
         }
     }
 
     pub fn run(&mut self) {
         while let Ok(msg) = self.command_rx.recv() {
             match msg {
-                ManagerCommand::Play(file_path) => {
+                ManagerCommand::StartPlayback(file_path) => {
                     // Setup read stream -------------------------------------------------------------
 
                     let opts = ReadStreamOptions {
@@ -91,19 +86,22 @@ impl PlaybackManager {
                     read_stream.seek(0, Default::default()).unwrap();
 
                     // Wait until the buffer is filled before sending it to the process thread.
-                    read_stream.block_until_ready().unwrap();
+                    // read_stream.block_until_ready().unwrap();
 
                     // ------------------------------------------------------------------------------
 
-                    let num_frames = read_stream.info().num_frames;
+                    self.stream_frame_count = Some(read_stream.info().num_frames);
 
                     self.to_process_tx
-                        .push(GuiToProcessMsg::UseStream(read_stream))
-                        .unwrap();
-                    self.to_process_tx
-                        .push(GuiToProcessMsg::PlayResume)
+                        .push(GuiToProcessMsg::StartPlayback(read_stream))
                         .unwrap();
                 }
+                ManagerCommand::Pause => self
+                    .to_process_tx
+                    .push(GuiToProcessMsg::Pause)
+                    .unwrap_or_else(|_| {
+                        warn!("Failed to send pause message to audio thread");
+                    }),
             }
         }
     }
@@ -125,9 +123,15 @@ impl Player {
     pub fn start_playback(&mut self, file_paths: &[String]) {
         let file_path = file_paths[0].to_owned();
         self.command_tx
-            .send(ManagerCommand::Play(file_path))
+            .send(ManagerCommand::StartPlayback(file_path))
             .unwrap_or_else(|_| {
-                warn!("Failed to send play command to the manager");
+                warn!("Failed to send start playback command to the manager");
             })
+    }
+
+    pub fn pause(&mut self) {
+        self.command_tx
+            .send(ManagerCommand::Pause)
+            .unwrap_or_else(|_| warn!("Failed to send pause command to the manager"))
     }
 }

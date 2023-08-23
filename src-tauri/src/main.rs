@@ -140,8 +140,8 @@ fn player_play() {
 }
 
 #[tauri::command]
-fn player_pause() {
-    todo!();
+fn player_pause(player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().pause();
 }
 
 #[tauri::command]

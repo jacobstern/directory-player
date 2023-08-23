@@ -1,5 +1,6 @@
 use creek::read::ReadError;
 use creek::{Decoder, ReadDiskStream, SeekMode, SymphoniaDecoder};
+use log::error;
 use rtrb::{Consumer, Producer};
 
 use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
@@ -22,6 +23,8 @@ pub struct Process {
     loop_start: usize,
     loop_end: usize,
 
+    gain: f32,
+
     fatal_error: bool,
 }
 
@@ -41,6 +44,8 @@ impl Process {
             loop_start: 0,
             loop_end: 0,
 
+            gain: 0.1,
+
             fatal_error: false,
         }
     }
@@ -56,7 +61,7 @@ impl Process {
                 self.fatal_error = true;
             }
 
-            println!("{:?}", e);
+            error!("{:?}", e);
             silence(data);
         }
     }
@@ -68,13 +73,11 @@ impl Process {
         // Process messages from GUI.
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
-                GuiToProcessMsg::UseStream(read_disk_stream) => {
+                GuiToProcessMsg::StartPlayback(read_disk_stream) => {
                     self.playback_state = PlaybackState::Paused;
                     self.loop_start = 0;
                     self.loop_end = 0;
                     self.read_disk_stream = Some(read_disk_stream);
-                }
-                GuiToProcessMsg::PlayResume => {
                     self.playback_state = PlaybackState::Playing;
                 }
                 GuiToProcessMsg::Pause => {
@@ -152,16 +155,16 @@ impl Process {
                         let ch = read_data.read_channel(0);
 
                         for i in 0..to_end_of_loop {
-                            data[i * 2] = ch[i];
-                            data[i * 2 + 1] = ch[i];
+                            data[i * 2] = ch[i] * self.gain;
+                            data[i * 2 + 1] = ch[i] * self.gain;
                         }
                     } else if read_data.num_channels() == 2 {
                         let ch1 = read_data.read_channel(0);
                         let ch2 = read_data.read_channel(1);
 
                         for i in 0..to_end_of_loop {
-                            data[i * 2] = ch1[i];
-                            data[i * 2 + 1] = ch2[i];
+                            data[i * 2] = ch1[i] * self.gain;
+                            data[i * 2 + 1] = ch2[i] * self.gain;
                         }
                     }
 
@@ -174,16 +177,16 @@ impl Process {
                         let ch = read_data.read_channel(0);
 
                         for i in 0..read_data.num_frames() {
-                            data[i * 2] = ch[i];
-                            data[i * 2 + 1] = ch[i];
+                            data[i * 2] = ch[i] * self.gain;
+                            data[i * 2 + 1] = ch[i] * self.gain;
                         }
                     } else if read_data.num_channels() == 2 {
                         let ch1 = read_data.read_channel(0);
                         let ch2 = read_data.read_channel(1);
 
                         for i in 0..read_data.num_frames() {
-                            data[i * 2] = ch1[i];
-                            data[i * 2 + 1] = ch2[i];
+                            data[i * 2] = ch1[i] * self.gain;
+                            data[i * 2 + 1] = ch2[i] * self.gain;
                         }
                     }
 
