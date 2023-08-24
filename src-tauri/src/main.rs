@@ -163,6 +163,7 @@ fn main() {
     let player = Player::new();
     let shared_player = Arc::new(Mutex::new(player));
     tauri::Builder::default()
+        .plugin(tauri_plugin_log::Builder::default().build())
         .manage(PlayerState(shared_player))
         .invoke_handler(tauri::generate_handler![
             treeview_get_view,

@@ -108,25 +108,30 @@ impl Process {
                 let read_frames = data.len() / 2;
                 // NOTE: Might want to report doc bug for this function
                 let read_data = read_disk_stream.read(read_frames)?;
+                let output_frames = read_data.num_frames();
 
                 if read_data.num_channels() == 1 {
                     let ch = read_data.read_channel(0);
 
-                    for i in 0..read_data.num_frames() {
-                        data[i * 2] = ch[i] * self.gain;
-                        data[i * 2 + 1] = ch[i] * self.gain;
+                    for i in 0..output_frames {
+                        data[i * 2] = ch[i];
+                        data[i * 2 + 1] = ch[i];
                     }
                 } else if read_data.num_channels() == 2 {
                     let ch1 = read_data.read_channel(0);
                     let ch2 = read_data.read_channel(1);
 
-                    for i in 0..read_data.num_frames() {
-                        data[i * 2] = ch1[i] * self.gain;
-                        data[i * 2 + 1] = ch2[i] * self.gain;
+                    for i in 0..output_frames {
+                        data[i * 2] = ch1[i];
+                        data[i * 2 + 1] = ch2[i];
                     }
                 }
 
-                data = &mut data[read_data.num_frames() * 2..];
+                for sample in &mut data[0..output_frames * 2] {
+                    *sample *= self.gain;
+                }
+
+                data = &mut data[output_frames * 2..];
 
                 if read_data.reached_end_of_file() {
                     self.playback_state = PlaybackState::Paused;

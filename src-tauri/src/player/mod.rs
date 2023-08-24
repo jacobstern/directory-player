@@ -5,6 +5,8 @@ use log::{info, warn};
 use rtrb::RingBuffer;
 use std::sync::mpsc;
 
+use self::output::Output;
+
 mod output;
 mod process;
 
@@ -45,11 +47,7 @@ fn gain_for_volume(volume: f64) -> f32 {
     } else {
         A * (B * x).exp()
     };
-    assert!(
-        amp.partial_cmp(&1_f64).map_or(false, |ord| ord.is_le()),
-        "Invalid amplitude {amp:?}"
-    );
-    amp as f32
+    (amp as f32).min(1.0)
 }
 
 #[derive(Clone)]
@@ -89,7 +87,7 @@ const NUM_CACHE_BLOCKS: usize = 20;
 const CACHE_SIZE: usize = NUM_CACHE_BLOCKS * SymphoniaDecoder::DEFAULT_BLOCK_SIZE;
 
 struct PlaybackManager {
-    _stream: cpal::Stream,
+    output: Output,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
     command_rx: mpsc::Receiver<ManagerCommand>,
     stream_frame_count: Option<usize>,
@@ -103,7 +101,7 @@ impl PlaybackManager {
     ) -> PlaybackManager {
         let (to_gui_tx, mut from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
         let (to_process_tx, from_gui_rx) = RingBuffer::<GuiToProcessMsg>::new(64);
-        let cpal_stream = output::start_stream(to_gui_tx, from_gui_rx);
+        let output = Output::new(to_gui_tx, from_gui_rx);
 
         thread::spawn({
             let tx = command_tx.clone();
@@ -129,7 +127,7 @@ impl PlaybackManager {
         });
 
         PlaybackManager {
-            _stream: cpal_stream,
+            output,
             to_process_tx,
             command_rx,
             stream_frame_count: None,
@@ -159,9 +157,11 @@ impl PlaybackManager {
                         warn!("Failed to send resume message to audio thread");
                     }),
                 ManagerCommand::Buffering => {
-                    info!("Buffering message received");
+                    // debug!("Buffering...");
                 }
-                ManagerCommand::PlaybackPos(_pos) => {}
+                ManagerCommand::PlaybackPos(_pos) => {
+                    // debug!("Played up to frame {_pos:?}");
+                }
                 ManagerCommand::PlaybackEnded => {
                     self.queue = self.queue.and_then(|queue| queue.go_next());
                     if let Some(queue) = self.queue.as_ref() {
@@ -197,7 +197,8 @@ impl PlaybackManager {
             // cache uses some memory (but memory is only allocated when the cache is created).
             //
             // The default is `1`.
-            num_caches: 2,
+            num_caches: 1,
+
             ..Default::default()
         };
 
