@@ -107,10 +107,9 @@ impl Process {
                 return Ok(());
             }
 
-            let num_channels = usize::from(read_disk_stream.info().num_channels);
             let mut reached_end_of_file = false;
 
-            while data.len() >= num_channels {
+            while !data.is_empty() {
                 let read_frames = data.len() / 2;
                 // NOTE: Might want to report doc bug for this function
                 let read_data = read_disk_stream.read(read_frames)?;
@@ -132,13 +131,14 @@ impl Process {
                     }
                 }
 
+                data = &mut data[read_data.num_frames() * 2..];
+
                 if read_data.reached_end_of_file() {
                     self.playback_state = PlaybackState::Paused;
                     reached_end_of_file = true;
                     break;
                 }
 
-                data = &mut data[read_data.num_frames() * 2..];
             }
 
             // Fill silence if we have reached the end of the stream
