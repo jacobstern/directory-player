@@ -12,8 +12,7 @@ mod process;
 pub enum GuiToProcessMsg {
     StartPlayback(ReadDiskStream<SymphoniaDecoder>),
     Pause,
-    Stop,
-    Restart,
+    Resume,
     SeekTo(usize),
 }
 
@@ -29,6 +28,7 @@ enum ManagerCommand {
     PlaybackPos(usize),
     PlaybackEnded,
     Buffering,
+    Resume,
 }
 
 #[derive(Clone)]
@@ -131,7 +131,15 @@ impl PlaybackManager {
                     .unwrap_or_else(|_| {
                         warn!("Failed to send pause message to audio thread");
                     }),
-                ManagerCommand::Buffering => {}
+                ManagerCommand::Resume => self
+                    .to_process_tx
+                    .push(GuiToProcessMsg::Resume)
+                    .unwrap_or_else(|_| {
+                        warn!("Failed to send resume message to audio thread");
+                    }),
+                ManagerCommand::Buffering => {
+                    info!("Buffering message received");
+                }
                 ManagerCommand::PlaybackPos(_pos) => {}
                 ManagerCommand::PlaybackEnded => {
                     self.queue = self.queue.and_then(|queue| queue.go_next());
@@ -215,5 +223,11 @@ impl Player {
         self.command_tx
             .send(ManagerCommand::Pause)
             .unwrap_or_else(|_| warn!("Failed to send pause command to the manager"))
+    }
+
+    pub fn play(&mut self) {
+        self.command_tx
+            .send(ManagerCommand::Resume)
+            .unwrap_or_else(|_| warn!("Failed to send resume command to the manager"))
     }
 }

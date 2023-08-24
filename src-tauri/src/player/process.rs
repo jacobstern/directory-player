@@ -75,10 +75,7 @@ impl Process {
                 GuiToProcessMsg::Pause => {
                     self.playback_state = PlaybackState::Paused;
                 }
-                GuiToProcessMsg::Stop => {
-                    self.playback_state = PlaybackState::Paused;
-                }
-                GuiToProcessMsg::Restart => {
+                GuiToProcessMsg::Resume => {
                     self.playback_state = PlaybackState::Playing;
                 }
                 GuiToProcessMsg::SeekTo(pos) => {
@@ -138,7 +135,6 @@ impl Process {
                     reached_end_of_file = true;
                     break;
                 }
-
             }
 
             // Fill silence if we have reached the end of the stream

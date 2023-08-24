@@ -135,8 +135,8 @@ fn treeview_collapse_directory(directory_path: String) -> TreeviewItem {
 }
 
 #[tauri::command]
-fn player_play() {
-    todo!();
+fn player_play(player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().play();
 }
 
 #[tauri::command]
