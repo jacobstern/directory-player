@@ -10,7 +10,7 @@ pub struct Output {
     pub buffer_size: u32,
 }
 
-const DEFAULT_BUFFER_SIZE: u32 = 1024;
+const PREFERRED_BUFFER_SIZE: u32 = 1024;
 
 impl Output {
     pub fn new(
@@ -29,8 +29,8 @@ impl Output {
         let sample_rate = default_config.sample_rate();
         let buffer_size_range = default_config.buffer_size();
         let buffer_size = match buffer_size_range {
-            cpal::SupportedBufferSize::Unknown => DEFAULT_BUFFER_SIZE,
-            cpal::SupportedBufferSize::Range { max, min: _ } => DEFAULT_BUFFER_SIZE.min(*max),
+            cpal::SupportedBufferSize::Unknown => PREFERRED_BUFFER_SIZE,
+            cpal::SupportedBufferSize::Range { max, min: _ } => PREFERRED_BUFFER_SIZE.min(*max),
         };
 
         let config = cpal::StreamConfig {

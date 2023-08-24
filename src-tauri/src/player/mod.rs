@@ -3,6 +3,7 @@ use std::{cmp::Ordering, thread, time::Duration};
 use creek::{Decoder, ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
 use log::{info, warn};
 use rtrb::RingBuffer;
+use rubato::{FftFixedOut, Resampler, VecResampler};
 use std::sync::mpsc;
 
 use self::output::Output;
@@ -10,9 +11,17 @@ use self::output::Output;
 mod output;
 mod process;
 
+type ResampleBuffer = Vec<Vec<f32>>;
+
+struct ProcessResampler {
+    resampler: FftFixedOut<f32>,
+    in_buffer: ResampleBuffer,
+    out_buffer: ResampleBuffer,
+}
+
 #[allow(clippy::large_enum_variant)]
 pub enum GuiToProcessMsg {
-    StartPlayback(ReadDiskStream<SymphoniaDecoder>),
+    StartPlayback(ReadDiskStream<SymphoniaDecoder>, Option<ProcessResampler>),
     Pause,
     Resume,
     SetGain(f32),
@@ -204,8 +213,35 @@ impl PlaybackManager {
 
         info!("Starting stream for {:?}", path);
 
-        // Open the read stream.
         let mut read_stream = ReadDiskStream::<SymphoniaDecoder>::new(path, 0, opts).unwrap();
+
+        let file_info = read_stream.info();
+
+        let mut process_resampler: Option<ProcessResampler> = None;
+        if let Some(sample_rate) = file_info.sample_rate {
+            if sample_rate != self.output.sample_rate {
+                let num_channels = file_info.num_channels;
+                let resampler: FftFixedOut<f32> = FftFixedOut::new(
+                    sample_rate as usize,
+                    self.output.sample_rate as usize,
+                    self.output.buffer_size as usize,
+                    // TODO: Investigate this parameter
+                    2,
+                    num_channels as usize,
+                )
+                // TODO: Error handling
+                .expect("Failed to initialize resampler");
+                let in_buffer = Resampler::input_buffer_allocate(&resampler, true);
+                let out_buffer = Resampler::output_buffer_allocate(&resampler, true);
+                process_resampler = Some(ProcessResampler {
+                    resampler,
+                    in_buffer,
+                    out_buffer,
+                });
+            }
+        }
+
+        self.stream_frame_count = Some(file_info.num_frames);
 
         // Cache the start of the file into cache with index `0`.
         let _ = read_stream.cache(0, 0);
@@ -214,13 +250,11 @@ impl PlaybackManager {
         // of the cache with index `0`.
         read_stream.seek(0, Default::default()).unwrap();
 
-        // Wait until the buffer is filled before sending it to the process thread.
-        // read_stream.block_until_ready().unwrap();
-
-        self.stream_frame_count = Some(read_stream.info().num_frames);
-
         self.to_process_tx
-            .push(GuiToProcessMsg::StartPlayback(read_stream))
+            .push(GuiToProcessMsg::StartPlayback(
+                read_stream,
+                process_resampler,
+            ))
             .unwrap();
     }
 }
