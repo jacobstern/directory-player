@@ -88,18 +88,7 @@ impl Process {
 
         let mut cache_missed_this_cycle = false;
         if let Some(read_disk_stream) = &mut self.read_disk_stream {
-            // Update client and check if it is ready.
-            if !read_disk_stream.is_ready()? {
-                cache_missed_this_cycle = true;
-                // Warn UI of buffering.
-                let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
-
-                // We can choose to either continue reading (which will return silence),
-                // or pause playback until the buffer is filled. This demo uses the former.
-            }
-
-            if let PlaybackState::Paused = self.playback_state {
-                // Paused, do nothing.
+            if self.playback_state == PlaybackState::Paused {
                 silence(data);
                 return Ok(());
             }
@@ -107,6 +96,12 @@ impl Process {
             let mut reached_end_of_file = false;
 
             while !data.is_empty() {
+                if !read_disk_stream.is_ready()? {
+                    cache_missed_this_cycle = true;
+                    let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
+                    break;
+                }
+
                 let read_frames = data.len() / 2;
                 // NOTE: Might want to report doc bug for this function
                 let read_data = read_disk_stream.read(read_frames)?;
