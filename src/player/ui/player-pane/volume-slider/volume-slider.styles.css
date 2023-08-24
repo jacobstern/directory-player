@@ -2,6 +2,7 @@
   -webkit-appearance: none;
   margin-left: 16px;
   background: transparent;
+  cursor: pointer;
 }
 
 .volume-slider::-webkit-slider-thumb {
@@ -15,6 +16,8 @@
 
 .volume-slider::-webkit-slider-runnable-track {
   -webkit-appearance: none;
+  border-radius: 2.5px;
   height: 5px;
-  background-color: #0d0d0d;
+  background-color: #161618;
+  box-shadow: 1px 1px 2px #102026;
 }

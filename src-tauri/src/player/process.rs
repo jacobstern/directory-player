@@ -38,7 +38,7 @@ impl Process {
             playback_state: PlaybackState::Paused,
             had_cache_miss_last_cycle: false,
 
-            gain: 0.17,
+            gain: 0.0,
 
             fatal_error: false,
         }
@@ -82,6 +82,9 @@ impl Process {
                     if let Some(read_disk_stream) = &mut self.read_disk_stream {
                         read_disk_stream.seek(pos, SeekMode::Auto)?;
                     }
+                }
+                GuiToProcessMsg::SetGain(gain) => {
+                    self.gain = gain;
                 }
             }
         }

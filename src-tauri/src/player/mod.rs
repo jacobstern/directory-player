@@ -1,4 +1,4 @@
-use std::{thread, time::Duration};
+use std::{cmp::Ordering, thread, time::Duration};
 
 use creek::{Decoder, ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
 use log::{info, warn};
@@ -13,6 +13,7 @@ pub enum GuiToProcessMsg {
     StartPlayback(ReadDiskStream<SymphoniaDecoder>),
     Pause,
     Resume,
+    SetGain(f32),
     SeekTo(usize),
 }
 
@@ -29,6 +30,26 @@ enum ManagerCommand {
     PlaybackEnded,
     Buffering,
     Resume,
+    SetVolume(f64),
+}
+
+fn gain_for_volume(volume: f64) -> f32 {
+    let clamped = volume.max(0_f64).min(100_f64);
+    // https://www.dr-lex.be/info-stuff/volumecontrols.html2
+    const A: f64 = 1e-3;
+    const B: f64 = 6.908;
+    let x = clamped / 100_f64;
+    let amp = if x.partial_cmp(&0.1_f64) == Some(Ordering::Less) {
+        // Linear ramp to 0
+        x * 10_f64 * A * (0.1_f64 * B).exp()
+    } else {
+        A * (B * x).exp()
+    };
+    assert!(
+        amp.partial_cmp(&1_f64).map_or(false, |ord| ord.is_le()),
+        "Invalid amplitude {amp:?}"
+    );
+    amp as f32
 }
 
 #[derive(Clone)]
@@ -147,6 +168,15 @@ impl PlaybackManager {
                         self.start_stream(queue.current().to_owned());
                     }
                 }
+                ManagerCommand::SetVolume(volume) => {
+                    let gain = gain_for_volume(volume);
+                    info!("Setting gain {gain:?}");
+                    self.to_process_tx
+                        .push(GuiToProcessMsg::SetGain(gain))
+                        .unwrap_or_else(|_| {
+                            warn!("Failed to send gain message to audio thread");
+                        })
+                }
             }
         }
     }
@@ -194,8 +224,6 @@ impl PlaybackManager {
     }
 }
 
-// pub async fn run_manager()
-
 pub struct Player {
     command_tx: mpsc::Sender<ManagerCommand>,
 }
@@ -229,5 +257,11 @@ impl Player {
         self.command_tx
             .send(ManagerCommand::Resume)
             .unwrap_or_else(|_| warn!("Failed to send resume command to the manager"))
+    }
+
+    pub fn set_volume(&mut self, volume: f64) {
+        self.command_tx
+            .send(ManagerCommand::SetVolume(volume))
+            .unwrap_or_else(|_| warn!("Failed to send volume command to the manager"))
     }
 }

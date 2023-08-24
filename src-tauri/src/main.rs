@@ -150,6 +150,11 @@ fn player_start_playback(file_paths: Vec<String>, player_state: tauri::State<Pla
 }
 
 #[tauri::command]
+fn player_set_volume(volume: f64, player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().set_volume(volume);
+}
+
+#[tauri::command]
 async fn show_main_window(window: tauri::Window) {
     window.get_window("main").unwrap().show().unwrap();
 }
@@ -166,6 +171,7 @@ fn main() {
             player_play,
             player_pause,
             player_start_playback,
+            player_set_volume,
             show_main_window
         ])
         .run(tauri::generate_context!())

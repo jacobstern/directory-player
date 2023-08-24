@@ -1,5 +1,6 @@
-import { ChangeEventHandler, useState } from "react";
+import { ChangeEventHandler, useEffect, useState } from "react";
 import "./volume-slider.styles.css";
+import { invoke } from "@tauri-apps/api";
 
 const LOCAL_STORAGE_VOLUME_KEY = "volume";
 const DEFAULT_VOLUME = 85;
@@ -23,6 +24,9 @@ export default function VolumeSlider() {
     localStorage.setItem(LOCAL_STORAGE_VOLUME_KEY, stringValue);
     setVolume(Number(stringValue));
   };
+  useEffect(() => {
+    invoke<void>("player_set_volume", { volume });
+  }, [volume]);
   return (
     <input
       className="volume-slider"
