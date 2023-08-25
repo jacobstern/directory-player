@@ -32,6 +32,7 @@ pub enum ProcessToGuiMsg {
     PlaybackPos(usize),
     Buffering,
     PlaybackEnded,
+    DisposeResamplerBuffers(ProcessResampler),
 }
 
 enum ManagerCommand {
@@ -110,14 +111,21 @@ impl PlaybackManager {
                 let mut failed_to_send = false;
                 while !failed_to_send {
                     while let Ok(msg) = from_process_rx.pop() {
-                        let result = tx.send(match msg {
-                            ProcessToGuiMsg::Buffering => ManagerCommand::Buffering,
-                            ProcessToGuiMsg::PlaybackPos(pos) => ManagerCommand::PlaybackPos(pos),
-                            ProcessToGuiMsg::PlaybackEnded => ManagerCommand::PlaybackEnded,
-                        });
-                        failed_to_send = result.is_err();
-                        if failed_to_send {
-                            break;
+                        let manager_command = match msg {
+                            ProcessToGuiMsg::Buffering => Some(ManagerCommand::Buffering),
+                            ProcessToGuiMsg::PlaybackPos(pos) => {
+                                Some(ManagerCommand::PlaybackPos(pos))
+                            }
+                            ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
+                            // Special message, just deallocate the resource
+                            ProcessToGuiMsg::DisposeResamplerBuffers(_) => None,
+                        };
+                        if let Some(command) = manager_command {
+                            let result = tx.send(command);
+                            failed_to_send = result.is_err();
+                            if failed_to_send {
+                                break;
+                            }
                         }
                     }
                     if !failed_to_send {
@@ -171,7 +179,6 @@ impl PlaybackManager {
                 }
                 ManagerCommand::SetVolume(volume) => {
                     let gain = gain_for_volume(volume);
-                    info!("Setting gain {gain:?}");
                     self.to_process_tx
                         .push(GuiToProcessMsg::SetGain(gain))
                         .unwrap_or_else(|_| {

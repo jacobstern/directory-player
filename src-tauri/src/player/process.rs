@@ -75,7 +75,7 @@ impl Process {
             match msg {
                 GuiToProcessMsg::StartPlayback(read_disk_stream, resampler) => {
                     self.read_disk_stream = Some(read_disk_stream);
-                    self.resampler = resampler;
+                    self.set_resampler(resampler);
                     self.playback_state = PlaybackState::Playing;
                 }
                 GuiToProcessMsg::Pause => {
@@ -96,13 +96,14 @@ impl Process {
         }
 
         let mut cache_missed_this_cycle = false;
+        let mut reached_end_of_file = false;
+
         if let Some(read_disk_stream) = &mut self.read_disk_stream {
             if self.playback_state == PlaybackState::Paused {
                 silence(data);
                 return Ok(());
             }
 
-            let mut reached_end_of_file = false;
             let num_channels = read_disk_stream.info().num_channels;
 
             if let Some(ProcessResampler {
@@ -133,7 +134,6 @@ impl Process {
                     decoded_frames += read_data.num_frames();
 
                     if read_data.reached_end_of_file() {
-                        self.playback_state = PlaybackState::Paused;
                         reached_end_of_file = true;
                         break;
                     }
@@ -160,6 +160,7 @@ impl Process {
                         data[i * 2 + 1] = out_buffer[0][i];
                     }
                 } else {
+                    // Test
                     for i in 0..output_frames {
                         data[i * 2] = out_buffer[0][i];
                         data[i * 2 + 1] = out_buffer[1][i];
@@ -205,7 +206,6 @@ impl Process {
                     data = &mut data[chunk_frames * 2..];
 
                     if read_data.reached_end_of_file() {
-                        self.playback_state = PlaybackState::Paused;
                         reached_end_of_file = true;
                         break;
                     }
@@ -225,19 +225,37 @@ impl Process {
             silence(data);
         }
 
+        if reached_end_of_file {
+            self.read_disk_stream = None;
+            self.playback_state = PlaybackState::Paused;
+            self.set_resampler(None);
+        }
+
         // When the cache misses, the buffer is filled with silence. So the next
         // buffer after the cache miss is starting from silence. To avoid an audible
         // pop, apply a ramping gain from 0 up to unity.
+
         // TODO: Fix this to have a more reasonable behavior
-        if self.had_cache_miss_last_cycle {
-            let buffer_size = data.len() as f32;
-            for (i, sample) in data.iter_mut().enumerate() {
-                *sample *= i as f32 / buffer_size;
-            }
-        }
+
+        // if self.had_cache_miss_last_cycle {
+        //     let buffer_size = data.len() as f32;
+        //     for (i, sample) in data.iter_mut().enumerate() {
+        //         *sample *= i as f32 / buffer_size;
+        //     }
+        // }
 
         self.had_cache_miss_last_cycle = cache_missed_this_cycle;
+
         Ok(())
+    }
+
+    fn set_resampler(&mut self, resampler: Option<ProcessResampler>) {
+        if let Some(resampler) = self.resampler.take() {
+            let _ = self
+                .to_gui_tx
+                .push(ProcessToGuiMsg::DisposeResamplerBuffers(resampler));
+        }
+        self.resampler = resampler;
     }
 }
 
