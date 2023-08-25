@@ -46,16 +46,8 @@ enum ManagerCommand {
 
 fn gain_for_volume(volume: f64) -> f32 {
     let clamped = volume.max(0_f64).min(100_f64);
-    // https://www.dr-lex.be/info-stuff/volumecontrols.html2
-    const A: f64 = 1e-3;
-    const B: f64 = 6.908;
-    let x = clamped / 100_f64;
-    let amp = if x.partial_cmp(&0.1_f64) == Some(Ordering::Less) {
-        // Linear ramp to 0
-        x * 10_f64 * A * (0.1_f64 * B).exp()
-    } else {
-        A * (B * x).exp()
-    };
+    let normalized = clamped / 100.0;
+    let amp = normalized.powf(2.7);
     (amp as f32).min(1.0)
 }
 
