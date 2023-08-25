@@ -113,6 +113,7 @@ impl Process {
             {
                 let requested_frames = resampler.input_frames_next();
                 let mut decoded_frames = 0;
+                let output_frames = resampler.output_frames_next();
 
                 while decoded_frames < requested_frames {
                     if !read_disk_stream.is_ready()? {
@@ -154,12 +155,12 @@ impl Process {
                     .expect("Resampling failure");
 
                 if num_channels == 1 {
-                    for i in 0..data.len() {
+                    for i in 0..output_frames {
                         data[i * 2] = out_buffer[0][i];
                         data[i * 2 + 1] = out_buffer[0][i];
                     }
                 } else {
-                    for i in 0..data.len() / 2 {
+                    for i in 0..output_frames {
                         data[i * 2] = out_buffer[0][i];
                         data[i * 2 + 1] = out_buffer[1][i];
                     }
