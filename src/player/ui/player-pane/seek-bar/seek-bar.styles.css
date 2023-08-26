@@ -1,0 +1,20 @@
+.seek-bar {
+  margin-top: 8px;
+  -webkit-appearance: none;
+  grid-row-start: seek-bar;
+  grid-row-end: seek-bar;
+  width: 100%;
+  background: transparent;
+  padding: 2px;
+}
+
+.seek-bar::-webkit-progress-bar {
+  height: 5px;
+  background-color: #19644b;
+  border-radius: 2.5px;
+}
+
+.seek-bar::-webkit-progress-value {
+  background-color: var(--duller-fg);
+  border-radius: 2.5px;
+}

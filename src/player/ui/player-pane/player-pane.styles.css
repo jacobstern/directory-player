@@ -9,7 +9,7 @@
 
 .player-pane__controls {
   display: grid;
-  grid-template-rows: [playback-controls] auto;
+  grid-template-rows: [playback-controls] auto [seek-bar];
   max-width: 800px;
 }
 
