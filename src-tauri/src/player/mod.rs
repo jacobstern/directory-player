@@ -1,9 +1,10 @@
-use std::{cmp::Ordering, thread, time::Duration};
+use std::{thread, time::Duration};
 
 use creek::{Decoder, ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
-use log::{info, warn};
+use log::{error, info, warn};
 use rtrb::RingBuffer;
-use rubato::{FftFixedOut, Resampler, VecResampler};
+use rubato::{FftFixedOut, Resampler};
+use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 
 use self::output::Output;
@@ -11,9 +12,9 @@ use self::output::Output;
 mod output;
 mod process;
 
-type ResampleBuffer = Vec<Vec<f32>>;
+pub type ResampleBuffer = Vec<Vec<f32>>;
 
-struct ProcessResampler {
+pub struct ProcessResampler {
     resampler: FftFixedOut<f32>,
     in_buffer: ResampleBuffer,
     out_buffer: ResampleBuffer,
@@ -28,6 +29,7 @@ pub enum GuiToProcessMsg {
     SeekTo(usize),
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ProcessToGuiMsg {
     PlaybackPos(usize),
     Buffering,
@@ -43,6 +45,18 @@ enum ManagerCommand {
     Buffering,
     Resume,
     SetVolume(f64),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TrackInfo {
+    path: String,
+    duration: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum PlayerEvent {
+    Progress(usize),
+    Track(TrackInfo),
 }
 
 fn gain_for_volume(volume: f64) -> f32 {
@@ -94,10 +108,12 @@ struct PlaybackManager {
     command_rx: mpsc::Receiver<ManagerCommand>,
     stream_frame_count: Option<usize>,
     queue: Option<Queue<String>>,
+    event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
 }
 
 impl PlaybackManager {
     pub fn new(
+        event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
         command_tx: mpsc::Sender<ManagerCommand>,
         command_rx: mpsc::Receiver<ManagerCommand>,
     ) -> PlaybackManager {
@@ -141,6 +157,7 @@ impl PlaybackManager {
             command_rx,
             stream_frame_count: None,
             queue: None,
+            event_tx,
         }
     }
 
@@ -168,9 +185,12 @@ impl PlaybackManager {
                 ManagerCommand::Buffering => {
                     // debug!("Buffering...");
                 }
-                ManagerCommand::PlaybackPos(_pos) => {
-                    // debug!("Played up to frame {_pos:?}");
-                }
+                ManagerCommand::PlaybackPos(pos) => self
+                    .event_tx
+                    .blocking_send(PlayerEvent::Progress(pos))
+                    .unwrap_or_else(|e| {
+                        error!("Failed to send Progress event with {e:?}");
+                    }),
                 ManagerCommand::PlaybackEnded => {
                     self.queue = self.queue.and_then(|queue| queue.go_next());
                     if let Some(queue) = self.queue.as_ref() {
@@ -179,6 +199,7 @@ impl PlaybackManager {
                 }
                 ManagerCommand::SetVolume(volume) => {
                     let gain = gain_for_volume(volume);
+                    info!("Setting gain {gain:?}");
                     self.to_process_tx
                         .push(GuiToProcessMsg::SetGain(gain))
                         .unwrap_or_else(|_| {
@@ -212,32 +233,37 @@ impl PlaybackManager {
 
         info!("Starting stream for {:?}", path);
 
-        let mut read_stream = ReadDiskStream::<SymphoniaDecoder>::new(path, 0, opts).unwrap();
+        // TODO: Handle open failure
+        let mut read_stream =
+            ReadDiskStream::<SymphoniaDecoder>::new(path.clone(), 0, opts).unwrap();
 
         let file_info = read_stream.info();
+        let num_frames = file_info.num_frames;
+        let sample_rate = file_info
+            .sample_rate
+            .expect("No sample rate available for file");
 
         let mut process_resampler: Option<ProcessResampler> = None;
-        if let Some(sample_rate) = file_info.sample_rate {
-            if sample_rate != self.output.sample_rate {
-                let num_channels = file_info.num_channels;
-                let resampler: FftFixedOut<f32> = FftFixedOut::new(
-                    sample_rate as usize,
-                    self.output.sample_rate as usize,
-                    self.output.buffer_size as usize,
-                    // TODO: Investigate this parameter
-                    2,
-                    num_channels as usize,
-                )
-                // TODO: Error handling
-                .expect("Failed to initialize resampler");
-                let in_buffer = Resampler::input_buffer_allocate(&resampler, true);
-                let out_buffer = Resampler::output_buffer_allocate(&resampler, true);
-                process_resampler = Some(ProcessResampler {
-                    resampler,
-                    in_buffer,
-                    out_buffer,
-                });
-            }
+
+        if sample_rate != self.output.sample_rate {
+            let num_channels = file_info.num_channels;
+            let resampler: FftFixedOut<f32> = FftFixedOut::new(
+                sample_rate as usize,
+                self.output.sample_rate as usize,
+                self.output.buffer_size as usize,
+                // TODO: Investigate this parameter
+                2,
+                num_channels as usize,
+            )
+            // TODO: Error handling
+            .expect("Failed to initialize resampler");
+            let in_buffer = Resampler::input_buffer_allocate(&resampler, true);
+            let out_buffer = Resampler::output_buffer_allocate(&resampler, true);
+            process_resampler = Some(ProcessResampler {
+                resampler,
+                in_buffer,
+                out_buffer,
+            });
         }
 
         self.stream_frame_count = Some(file_info.num_frames);
@@ -248,6 +274,15 @@ impl PlaybackManager {
         // Tell the stream to seek to the beginning of file. This will also alert the stream to the existence
         // of the cache with index `0`.
         read_stream.seek(0, Default::default()).unwrap();
+
+        self.event_tx
+            .blocking_send(PlayerEvent::Track(TrackInfo {
+                path,
+                duration: num_frames,
+            }))
+            .unwrap_or_else(|e| {
+                error!("Failed to send Track event with {e:?}");
+            });
 
         self.to_process_tx
             .push(GuiToProcessMsg::StartPlayback(
@@ -263,12 +298,12 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new() -> Player {
+    pub fn new(event_tx: tokio::sync::mpsc::Sender<PlayerEvent>) -> Player {
         let (command_tx, rx) = mpsc::channel();
         thread::spawn({
             let tx = command_tx.clone();
             // TODO: Fix up builder pattern for PlaybackManager
-            move || PlaybackManager::new(tx, rx).run()
+            move || PlaybackManager::new(event_tx, tx, rx).run()
         });
         Player { command_tx }
     }

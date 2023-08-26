@@ -17,13 +17,16 @@ cpal = "0.15.2"
 tauri = { version = "1.4", features = ["shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-creek = { git = "https://github.com/jacobstern/creek", rev = "10b989a", features = [
+# 10b989a = seeking fix
+# 8a33286 = upstream
+creek = { git = "https://github.com/jacobstern/creek", rev = "8a33286", features = [
   "decode-mp3",
 ] }
 rtrb = "0.2.3"
 log = "0.4.20"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "5b814f5" }
 rubato = "0.14.1"
+tokio = "1.32.0"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

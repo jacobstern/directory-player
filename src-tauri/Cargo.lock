@@ -554,7 +554,7 @@ dependencies = [
 [[package]]
 name = "creek"
 version = "1.1.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=8a33286#8a33286b28049f4d73b2eaa0cd2cd890d9e88a8a"
 dependencies = [
  "creek-core",
  "creek-decode-symphonia",
@@ -564,7 +564,7 @@ dependencies = [
 [[package]]
 name = "creek-core"
 version = "0.1.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=8a33286#8a33286b28049f4d73b2eaa0cd2cd890d9e88a8a"
 dependencies = [
  "rtrb",
 ]
@@ -572,7 +572,7 @@ dependencies = [
 [[package]]
 name = "creek-decode-symphonia"
 version = "0.2.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=8a33286#8a33286b28049f4d73b2eaa0cd2cd890d9e88a8a"
 dependencies = [
  "creek-core",
  "log",
@@ -582,7 +582,7 @@ dependencies = [
 [[package]]
 name = "creek-encode-wav"
 version = "0.1.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=8a33286#8a33286b28049f4d73b2eaa0cd2cd890d9e88a8a"
 dependencies = [
  "byte-slice-cast",
  "creek-core",
@@ -741,6 +741,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-log",
+ "tokio",
 ]
 
 [[package]]

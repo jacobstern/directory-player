@@ -3,12 +3,13 @@
 
 mod player;
 
-use player::Player;
+use log::error;
+use player::{Player, PlayerEvent};
 use serde::Serialize;
 use std::fs::{DirEntry, ReadDir};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{async_runtime, Manager};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type")]
@@ -160,8 +161,11 @@ async fn show_main_window(window: tauri::Window) {
 }
 
 fn main() {
-    let player = Player::new();
+    let (player_event_tx, mut player_event_rx) = async_runtime::channel(1024);
+
+    let player = Player::new(player_event_tx);
     let shared_player = Arc::new(Mutex::new(player));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
         .manage(PlayerState(shared_player))
@@ -175,6 +179,28 @@ fn main() {
             player_set_volume,
             show_main_window
         ])
+        .setup(|app| {
+            let handle = app.handle();
+            async_runtime::spawn(async move {
+                while let Some(msg) = player_event_rx.recv().await {
+                    match msg {
+                        PlayerEvent::Progress(progress) => {
+                            handle
+                                .emit_all("player:progress", progress)
+                                .unwrap_or_else(|e| {
+                                    error!("Failed to emit player:progress with {e:?}");
+                                });
+                        }
+                        PlayerEvent::Track(track) => {
+                            handle.emit_all("player:track", track).unwrap_or_else(|e| {
+                                error!("Failed to emit player:track with {e:?}");
+                            });
+                        }
+                    }
+                }
+            });
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
