@@ -88,6 +88,7 @@ impl Process {
                     if let Some(read_disk_stream) = &mut self.read_disk_stream {
                         read_disk_stream.seek(pos, SeekMode::Auto)?;
                     }
+                    let _ = self.to_gui_tx.push(ProcessToGuiMsg::DidSeek);
                 }
                 GuiToProcessMsg::SetGain(gain) => {
                     self.gain = gain;
@@ -98,12 +99,9 @@ impl Process {
         let mut cache_missed_this_cycle = false;
         let mut reached_end_of_file = false;
 
-        if let Some(read_disk_stream) = &mut self.read_disk_stream {
-            if self.playback_state == PlaybackState::Paused {
-                silence(data);
-                return Ok(());
-            }
-
+        if self.playback_state == PlaybackState::Paused {
+            silence(data);
+        } else if let Some(read_disk_stream) = &mut self.read_disk_stream {
             let num_channels = read_disk_stream.info().num_channels;
 
             if let Some(ProcessResampler {
@@ -218,10 +216,9 @@ impl Process {
             let _ = self.to_gui_tx.push(if reached_end_of_file {
                 ProcessToGuiMsg::PlaybackEnded
             } else {
-                ProcessToGuiMsg::PlaybackPos(read_disk_stream.playhead())
+                ProcessToGuiMsg::Progress(read_disk_stream.playhead())
             });
         } else {
-            // Output silence until file is received.
             silence(data);
         }
 

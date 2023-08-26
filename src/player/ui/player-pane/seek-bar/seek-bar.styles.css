@@ -1,5 +1,13 @@
 .seek-bar {
-  margin-top: 8px;
+  position: relative;
+  padding: 8px 0;
+}
+
+.seek-bar--can-seek {
+  cursor: pointer;
+}
+
+.seek-bar__progress {
   -webkit-appearance: none;
   grid-row-start: seek-bar;
   grid-row-end: seek-bar;
@@ -8,13 +16,26 @@
   padding: 2px;
 }
 
-.seek-bar::-webkit-progress-bar {
+.seek-bar__progress::-webkit-progress-bar {
   height: 5px;
   background-color: var(--main-bg);
   border-radius: 2.5px;
 }
 
-.seek-bar::-webkit-progress-value {
+.seek-bar__progress::-webkit-progress-value {
   background-color: var(--duller-fg);
   border-radius: 2.5px;
+}
+
+.seek-bar__thumb {
+  /* To avoid triggering mouse event on .seek-bar */
+  pointer-events: none;
+  opacity: 0;
+  position: absolute;
+  left: 0;
+  width: 5px;
+  height: 15px;
+  background: var(--duller-fg);
+  border-radius: 3px;
+  top: 5.5px;
 }

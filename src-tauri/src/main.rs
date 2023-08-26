@@ -156,6 +156,11 @@ fn player_set_volume(volume: f64, player_state: tauri::State<PlayerState>) {
 }
 
 #[tauri::command]
+fn player_seek(offset: usize, player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().seek(offset);
+}
+
+#[tauri::command]
 async fn show_main_window(window: tauri::Window) {
     window.get_window("main").unwrap().show().unwrap();
 }
@@ -177,6 +182,7 @@ fn main() {
             player_pause,
             player_start_playback,
             player_set_volume,
+            player_seek,
             show_main_window
         ])
         .setup(|app| {
@@ -194,6 +200,11 @@ fn main() {
                         PlayerEvent::Track(track) => {
                             handle.emit_all("player:track", track).unwrap_or_else(|e| {
                                 error!("Failed to emit player:track with {e:?}");
+                            });
+                        }
+                        PlayerEvent::DidSeek => {
+                            handle.emit_all("player:didseek", ()).unwrap_or_else(|e| {
+                                error!("Failed to emit player:didseek with {e:?}");
                             });
                         }
                     }

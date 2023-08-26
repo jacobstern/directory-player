@@ -31,32 +31,36 @@ pub enum GuiToProcessMsg {
 
 #[allow(clippy::large_enum_variant)]
 pub enum ProcessToGuiMsg {
-    PlaybackPos(usize),
+    Progress(usize),
     Buffering,
     PlaybackEnded,
     DisposeResamplerBuffers(ProcessResampler),
+    DidSeek,
 }
 
 enum ManagerCommand {
     StartPlayback(Vec<String>),
     Pause,
-    PlaybackPos(usize),
+    Progress(usize),
     PlaybackEnded,
     Buffering,
     Resume,
     SetVolume(f64),
+    SeekTo(usize),
+    DidSeek,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TrackInfo {
-    path: String,
-    duration: usize,
+    pub path: String,
+    pub duration: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PlayerEvent {
     Progress(usize),
     Track(TrackInfo),
+    DidSeek,
 }
 
 fn gain_for_volume(volume: f64) -> f32 {
@@ -129,10 +133,9 @@ impl PlaybackManager {
                     while let Ok(msg) = from_process_rx.pop() {
                         let manager_command = match msg {
                             ProcessToGuiMsg::Buffering => Some(ManagerCommand::Buffering),
-                            ProcessToGuiMsg::PlaybackPos(pos) => {
-                                Some(ManagerCommand::PlaybackPos(pos))
-                            }
+                            ProcessToGuiMsg::Progress(pos) => Some(ManagerCommand::Progress(pos)),
                             ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
+                            ProcessToGuiMsg::DidSeek => Some(ManagerCommand::DidSeek),
                             // Special message, just deallocate the resource
                             ProcessToGuiMsg::DisposeResamplerBuffers(_) => None,
                         };
@@ -185,11 +188,17 @@ impl PlaybackManager {
                 ManagerCommand::Buffering => {
                     // debug!("Buffering...");
                 }
-                ManagerCommand::PlaybackPos(pos) => self
+                ManagerCommand::Progress(pos) => self
                     .event_tx
                     .blocking_send(PlayerEvent::Progress(pos))
                     .unwrap_or_else(|e| {
                         error!("Failed to send Progress event with {e:?}");
+                    }),
+                ManagerCommand::DidSeek => self
+                    .event_tx
+                    .blocking_send(PlayerEvent::DidSeek)
+                    .unwrap_or_else(|e| {
+                        error!("Failed to send Seek event with {e:?}");
                     }),
                 ManagerCommand::PlaybackEnded => {
                     self.queue = self.queue.and_then(|queue| queue.go_next());
@@ -206,6 +215,12 @@ impl PlaybackManager {
                             warn!("Failed to send gain message to audio thread");
                         })
                 }
+                ManagerCommand::SeekTo(offset) => self
+                    .to_process_tx
+                    .push(GuiToProcessMsg::SeekTo(offset))
+                    .unwrap_or_else(|_| {
+                        error!("Failed to send seek message to audio thread");
+                    }),
             }
         }
     }
@@ -313,24 +328,30 @@ impl Player {
             .send(ManagerCommand::StartPlayback(Vec::from(file_paths)))
             .unwrap_or_else(|_| {
                 warn!("Failed to send start playback command to the manager");
-            })
+            });
     }
 
     pub fn pause(&mut self) {
         self.command_tx
             .send(ManagerCommand::Pause)
-            .unwrap_or_else(|_| warn!("Failed to send pause command to the manager"))
+            .unwrap_or_else(|_| warn!("Failed to send pause command to the manager"));
     }
 
     pub fn play(&mut self) {
         self.command_tx
             .send(ManagerCommand::Resume)
-            .unwrap_or_else(|_| warn!("Failed to send resume command to the manager"))
+            .unwrap_or_else(|_| warn!("Failed to send resume command to the manager"));
     }
 
     pub fn set_volume(&mut self, volume: f64) {
         self.command_tx
             .send(ManagerCommand::SetVolume(volume))
-            .unwrap_or_else(|_| warn!("Failed to send volume command to the manager"))
+            .unwrap_or_else(|_| warn!("Failed to send volume command to the manager"));
+    }
+
+    pub fn seek(&mut self, offset: usize) {
+        self.command_tx
+            .send(ManagerCommand::SeekTo(offset))
+            .unwrap_or_else(|_| error!("Failed to send seek command to the manager"));
     }
 }
