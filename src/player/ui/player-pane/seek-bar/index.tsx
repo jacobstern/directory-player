@@ -6,8 +6,6 @@ import { PlayerProgress, PlayerTrack } from "../../../types";
 import classNames from "classnames";
 import { invoke } from "@tauri-apps/api";
 
-const VALUE_FUDGE_FACTOR = 0.015;
-
 export default function SeekBar() {
   const [trackDuration, setTrackDuration] = useState<number | undefined>();
   const [progress, setProgress] = useState<number | undefined>();
@@ -36,7 +34,7 @@ export default function SeekBar() {
 
   const value =
     trackDuration !== undefined && progress !== undefined
-      ? VALUE_FUDGE_FACTOR + progress / trackDuration
+      ? progress / trackDuration
       : 0;
 
   const canSeek = trackDuration !== undefined && progress !== undefined;

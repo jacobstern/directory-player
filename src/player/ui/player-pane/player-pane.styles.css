@@ -5,6 +5,7 @@
   background-color: #202020;
   box-shadow: 0 0 20px #202026;
   z-index: 1;
+  -webkit-user-select: none;
 }
 
 .player-pane__controls {
