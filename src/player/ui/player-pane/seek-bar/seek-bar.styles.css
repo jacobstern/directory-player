@@ -38,4 +38,5 @@
   background: var(--duller-fg);
   border-radius: 3px;
   top: 5.5px;
+  box-shadow: 0.5px 0.5px 2px #202026;
 }

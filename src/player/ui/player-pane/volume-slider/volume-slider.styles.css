@@ -12,6 +12,7 @@
   background: var(--duller-fg);
   border-radius: 3px;
   margin-top: -4.5px;
+  box-shadow: 0.5px 0.5px 2px #202026;
 }
 
 .volume-slider::-webkit-slider-runnable-track {
