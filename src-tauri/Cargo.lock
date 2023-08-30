@@ -554,7 +554,7 @@ dependencies = [
 [[package]]
 name = "creek"
 version = "1.1.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=70792bc#70792bcccc15393c2526a1da504043177fc6cb73"
 dependencies = [
  "creek-core",
  "creek-decode-symphonia",
@@ -564,7 +564,7 @@ dependencies = [
 [[package]]
 name = "creek-core"
 version = "0.1.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=70792bc#70792bcccc15393c2526a1da504043177fc6cb73"
 dependencies = [
  "rtrb",
 ]
@@ -572,7 +572,7 @@ dependencies = [
 [[package]]
 name = "creek-decode-symphonia"
 version = "0.2.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=70792bc#70792bcccc15393c2526a1da504043177fc6cb73"
 dependencies = [
  "creek-core",
  "log",
@@ -582,7 +582,7 @@ dependencies = [
 [[package]]
 name = "creek-encode-wav"
 version = "0.1.0"
-source = "git+https://github.com/jacobstern/creek?rev=10b989a#10b989a6102c3805d6d55f5becd276ae8c81aaba"
+source = "git+https://github.com/jacobstern/creek?rev=70792bc#70792bcccc15393c2526a1da504043177fc6cb73"
 dependencies = [
  "byte-slice-cast",
  "creek-core",
@@ -731,6 +731,7 @@ dependencies = [
 name = "directory-player"
 version = "0.0.0"
 dependencies = [
+ "arrayvec",
  "cpal",
  "creek",
  "log",
@@ -738,6 +739,7 @@ dependencies = [
  "rubato",
  "serde",
  "serde_json",
+ "symphonia",
  "tauri",
  "tauri-build",
  "tauri-plugin-log",

@@ -8,9 +8,12 @@ use std::sync::mpsc;
 
 use self::manager::{ManagerCommand, PlaybackManager};
 
+mod errors;
+mod file_stream;
 mod manager;
 mod output;
 mod process;
+mod resampler;
 
 pub type ResampleBuffer = Vec<Vec<f32>>;
 
