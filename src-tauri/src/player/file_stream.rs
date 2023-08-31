@@ -1,16 +1,13 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use log::{error, warn};
-use symphonia::core::{
-    audio::{AudioBufferRef, SampleBuffer},
-    codecs::{Decoder, DecoderOptions},
-    formats::{FormatReader, Packet},
-    io::MediaSourceStream,
-    probe::Hint,
-};
+use log::{error, trace, warn};
+use rubato::{FftFixedIn, VecResampler};
+use symphonia::core::audio::{AudioBuffer, Signal};
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStream, probe::Hint};
 
-use super::{errors::FileStreamOpenError, resampler::Resampler};
+use super::errors::FileStreamOpenError;
 
 const MESSAGE_BUFFER_SIZE: usize = 16384;
 
@@ -19,72 +16,85 @@ struct FileStreamServer {
     decoder: Box<dyn Decoder>,
 }
 
+#[derive(Debug, Clone)]
 struct DecodedBlock {
-    planar_samples: Vec<f32>,
+    samples: Vec<Vec<f32>>,
     num_channels: usize,
-    packet_info: PacketInfo,
+    num_frames: usize,
+    start_frame: usize,
+    is_eof: bool,
     next: Option<Box<DecodedBlock>>,
 }
 
 enum DecodeWorkerToFileStreamMessage {
     Block(Box<DecodedBlock>),
-    Eof,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PacketInfo {
-    ts: u64,
-    dur: u64,
-    trim_start: u32,
-    trim_end: u32,
-}
-
-impl PacketInfo {
-    fn from_packet(packet: &Packet) -> Self {
-        PacketInfo {
-            ts: packet.ts,
-            dur: packet.dur,
-            trim_start: packet.trim_start,
-            trim_end: packet.trim_end,
-        }
-    }
 }
 
 struct DecodeWorker {
     message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
+    // TODO: Needs to be SampleBuffer?
+    input_buffer: Vec<Vec<f32>>,
+    output_buffer: Vec<Vec<f32>>,
     reader: Box<dyn FormatReader>,
     decoder: Box<dyn Decoder>,
-    resampler: Option<Resampler>,
+    resampler: Option<FftFixedIn<f32>>,
     playhead: usize,
     num_channels: usize,
-    sample_rate: u32,
-    target_sample_rate: u32,
+    block_size: usize,
     track_id: u32,
 }
 
 impl DecodeWorker {
+    // TODO: Fix clippy warning
+    #[allow(clippy::too_many_arguments)]
     fn new(
         target_sample_rate: u32,
+        num_channels: usize,
+        block_size: usize,
+        sample_rate: u32,
         track_id: u32,
         reader: Box<dyn FormatReader>,
         decoder: Box<dyn Decoder>,
-        resampler: Option<Resampler>,
         message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
     ) -> Self {
-        // Decoder has already decoded the first packet
-        let first = decoder.last_decoded();
-        let spec = first.spec();
-        let num_channels = spec.channels.count();
-        let sample_rate = spec.rate;
+        let mut maybe_resampler = if sample_rate != target_sample_rate {
+            Some(
+                FftFixedIn::new(
+                    sample_rate as usize,
+                    target_sample_rate as usize,
+                    block_size,
+                    2,
+                    num_channels,
+                )
+                .expect("Faile to create resampler"),
+            )
+        } else {
+            None
+        };
+        let input_buffer =
+            Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)));
+        let mut output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
+            resampler.output_buffer_allocate(true)
+        } else {
+            Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)))
+        };
+        if decoder.last_decoded().frames() > 0 {
+            let buffer = decoder.last_decoded().make_equivalent();
+            for (i, channel) in output_buffer.iter_mut().enumerate() {
+                channel.extend_from_slice(buffer.chan(i));
+            }
+            trace!("Initial output buffer len: {}", output_buffer[0].len());
+        }
         DecodeWorker {
             message_producer,
+            input_buffer,
+            output_buffer,
             reader,
             decoder,
-            resampler,
+            resampler: maybe_resampler,
             playhead: 0,
             num_channels,
-            sample_rate,
-            target_sample_rate,
+            block_size,
             track_id,
         }
     }
@@ -102,9 +112,32 @@ impl DecodeWorker {
                     if err.kind() == std::io::ErrorKind::UnexpectedEof
                         && err.to_string() == "end of stream" =>
                 {
+                    let num_frames = self.input_buffer[0].len();
+                    for channel in self.input_buffer.iter_mut() {
+                        channel.resize(self.block_size - channel.len(), 0.0);
+                        trace!("Resizing channel to {}", channel.len());
+                    }
+                    let samples = if let Some(resampler) = self.resampler.as_mut() {
+                        resampler
+                            .process_into_buffer(&self.input_buffer, &mut self.output_buffer, None)
+                            .expect("Failed to resample");
+                        self.output_buffer.clone()
+                    } else {
+                        let cloned = self.input_buffer.clone();
+                        self.input_buffer.clear();
+                        cloned
+                    };
                     self.message_producer
-                        .push(DecodeWorkerToFileStreamMessage::Eof)
-                        // Should not fail as we checked for is_full() above.
+                        .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
+                            DecodedBlock {
+                                samples,
+                                num_channels: self.num_channels,
+                                num_frames,
+                                start_frame: self.playhead,
+                                is_eof: true,
+                                next: None,
+                            },
+                        )))
                         .unwrap();
                     break Ok(());
                 }
@@ -119,15 +152,56 @@ impl DecodeWorker {
 
             match self.decoder.decode(&packet) {
                 Ok(decoded) => {
-                    self.message_producer
-                        .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
-                            make_block(
-                                PacketInfo::from_packet(&packet),
-                                decoded,
-                                &mut self.resampler,
-                            ),
-                        )))
-                        .unwrap();
+                    let num_frames = decoded.frames();
+                    if num_frames == 0 {
+                        continue;
+                    }
+                    let mut buffer: AudioBuffer<f32> = decoded.make_equivalent();
+                    decoded.convert(&buffer);
+                    if num_frames + self.input_buffer[0].len() >= self.block_size {
+                        let consume_samples =
+                            (self.block_size - self.input_buffer[0].len()).min(num_frames);
+                        for (i, channel) in self.input_buffer.iter_mut().enumerate() {
+                            trace!(
+                                "num_frames = {}, channel = {}, channel length = {}",
+                                num_frames,
+                                i,
+                                buffer.chan(i).len()
+                            );
+                            channel.extend_from_slice(&buffer.chan(i)[..consume_samples]);
+                        }
+                        buffer.shift(consume_samples);
+                        let samples = if let Some(resampler) = self.resampler.as_mut() {
+                            resampler
+                                .process_into_buffer(
+                                    &self.input_buffer,
+                                    &mut self.output_buffer,
+                                    None,
+                                )
+                                .expect("Failed to resample");
+                            self.output_buffer.clone()
+                        } else {
+                            let cloned = self.input_buffer.clone();
+                            self.input_buffer.clear();
+                            cloned
+                        };
+                        self.message_producer
+                            .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
+                                DecodedBlock {
+                                    samples,
+                                    num_channels: self.num_channels,
+                                    num_frames,
+                                    start_frame: self.playhead,
+                                    is_eof: true,
+                                    next: None,
+                                },
+                            )))
+                            .unwrap();
+                        self.playhead += self.block_size;
+                    }
+                    for (i, channel) in self.input_buffer.iter_mut().enumerate() {
+                        channel.extend_from_slice(buffer.chan(i));
+                    }
                 }
                 Err(symphonia::core::errors::Error::DecodeError(err)) => {
                     warn!("decode error: {}", err)
@@ -138,30 +212,6 @@ impl DecodeWorker {
         if let Err(e) = res {
             error!("DecodeWorker error: {}", e);
         }
-    }
-}
-
-fn make_block(
-    packet_info: PacketInfo,
-    decoded: AudioBufferRef,
-    maybe_resampler: &mut Option<Resampler>,
-) -> DecodedBlock {
-    let num_channels = decoded.spec().channels.count();
-
-    let planar_samples: Vec<f32> = if let Some(resampler) = maybe_resampler.as_mut() {
-        let resampled = resampler.resample(decoded).unwrap();
-        resampled.to_vec()
-    } else {
-        let mut sample_buffer = SampleBuffer::new(decoded.frames() as u64, *decoded.spec());
-        sample_buffer.copy_planar_ref(decoded);
-        sample_buffer.samples().to_vec()
-    };
-
-    DecodedBlock {
-        packet_info,
-        planar_samples,
-        num_channels,
-        next: None,
     }
 }
 
@@ -201,7 +251,7 @@ impl FileStream {
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions { verify: false })?;
 
-        let (decoded, packet_info) = loop {
+        let decoded = loop {
             let packet = match reader.next_packet() {
                 Ok(packet) => packet,
                 Err(err) => break Err(err),
@@ -218,43 +268,36 @@ impl FileStream {
                     warn!("decode error: {}", err);
                 }
                 Err(err) => break Err(err),
-                Ok(decoded) => break Ok((decoded, PacketInfo::from_packet(&packet))),
+                Ok(decoded) => break Ok(decoded),
             }
         }?;
 
-        let spec = decoded.spec();
-        let mut resampler = if spec.rate != target_sample_rate {
-            Some(Resampler::new(
-                *spec,
-                target_sample_rate as usize,
-                decoded.capacity() as u64,
-            ))
-        } else {
-            None
-        };
+        trace!("First decoded frames: {}", decoded.frames());
 
-        let blocks = if decoded.frames() > 0 {
-            Some(Box::new(make_block(packet_info, decoded, &mut resampler)))
-        } else {
-            None
-        };
+        let spec = decoded.spec();
+        let sample_rate = spec.rate;
+        let block_size = decoded.capacity();
+        let num_channels = spec.channels.count();
 
         let (message_producer, message_consumer) = rtrb::RingBuffer::new(MESSAGE_BUFFER_SIZE);
         let worker = DecodeWorker::new(
             target_sample_rate,
+            num_channels,
+            block_size,
+            sample_rate,
             track_id,
             reader,
             decoder,
-            resampler,
             message_producer,
         );
+
         std::thread::spawn(move || {
             worker.run();
         });
 
         Ok(Self {
             message_consumer,
-            blocks,
+            blocks: None,
             is_eof: false,
         })
     }
@@ -279,9 +322,6 @@ impl FileStream {
                     } else {
                         self.blocks = Some(decoded);
                     }
-                }
-                DecodeWorkerToFileStreamMessage::Eof => {
-                    self.is_eof = true;
                 }
             }
         }
