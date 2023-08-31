@@ -1,10 +1,13 @@
 use std::fs::File;
+use std::ops::Range;
 use std::path::PathBuf;
 
 use log::{error, trace, warn};
 use rubato::{FftFixedIn, VecResampler};
-use symphonia::core::audio::{AudioBuffer, Signal};
+use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
 use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::conv::IntoSample;
+use symphonia::core::sample::Sample;
 use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStream, probe::Hint};
 
 use super::errors::FileStreamOpenError;
@@ -14,6 +17,35 @@ const MESSAGE_BUFFER_SIZE: usize = 16384;
 struct FileStreamServer {
     reader: Box<dyn FormatReader>,
     decoder: Box<dyn Decoder>,
+}
+
+fn convert_samples_any(
+    input: &AudioBufferRef<'_>,
+    output: &mut [Vec<f32>],
+    input_range: Range<usize>,
+) {
+    match input {
+        AudioBufferRef::U8(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::U16(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::U24(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::U32(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::S8(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::S16(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::S24(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::S32(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::F32(input) => convert_samples(input, output, input_range),
+        AudioBufferRef::F64(input) => convert_samples(input, output, input_range),
+    }
+}
+
+fn convert_samples<S>(input: &AudioBuffer<S>, output: &mut [Vec<f32>], input_range: Range<usize>)
+where
+    S: Sample + IntoSample<f32> + Sized,
+{
+    for (c, dst) in output.iter_mut().enumerate() {
+        let src = input.chan(c);
+        dst.extend(src[input_range.clone()].iter().map(|&s| s.into_sample()));
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -71,16 +103,16 @@ impl DecodeWorker {
         } else {
             None
         };
-        let input_buffer =
+        let mut input_buffer =
             Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)));
-        let mut output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
+        let output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
             resampler.output_buffer_allocate(true)
         } else {
             Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)))
         };
         if decoder.last_decoded().frames() > 0 {
             let buffer = decoder.last_decoded().make_equivalent();
-            for (i, channel) in output_buffer.iter_mut().enumerate() {
+            for (i, channel) in input_buffer.iter_mut().enumerate() {
                 channel.extend_from_slice(buffer.chan(i));
             }
             trace!("Initial output buffer len: {}", output_buffer[0].len());
@@ -123,10 +155,11 @@ impl DecodeWorker {
                             .expect("Failed to resample");
                         self.output_buffer.clone()
                     } else {
-                        let cloned = self.input_buffer.clone();
-                        self.input_buffer.clear();
-                        cloned
+                        self.input_buffer.clone()
                     };
+                    for channel in self.input_buffer.iter_mut() {
+                        channel.clear();
+                    }
                     self.message_producer
                         .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
                             DecodedBlock {
@@ -156,21 +189,14 @@ impl DecodeWorker {
                     if num_frames == 0 {
                         continue;
                     }
-                    let mut buffer: AudioBuffer<f32> = decoded.make_equivalent();
-                    decoded.convert(&buffer);
+                    let consume_samples =
+                        (self.block_size - self.input_buffer[0].len()).min(num_frames);
                     if num_frames + self.input_buffer[0].len() >= self.block_size {
-                        let consume_samples =
-                            (self.block_size - self.input_buffer[0].len()).min(num_frames);
-                        for (i, channel) in self.input_buffer.iter_mut().enumerate() {
-                            trace!(
-                                "num_frames = {}, channel = {}, channel length = {}",
-                                num_frames,
-                                i,
-                                buffer.chan(i).len()
-                            );
-                            channel.extend_from_slice(&buffer.chan(i)[..consume_samples]);
-                        }
-                        buffer.shift(consume_samples);
+                        convert_samples_any(
+                            &decoded,
+                            self.input_buffer.as_mut_slice(),
+                            0..consume_samples,
+                        );
                         let samples = if let Some(resampler) = self.resampler.as_mut() {
                             resampler
                                 .process_into_buffer(
@@ -181,10 +207,11 @@ impl DecodeWorker {
                                 .expect("Failed to resample");
                             self.output_buffer.clone()
                         } else {
-                            let cloned = self.input_buffer.clone();
-                            self.input_buffer.clear();
-                            cloned
+                            self.input_buffer.clone()
                         };
+                        for channel in self.input_buffer.iter_mut() {
+                            channel.clear();
+                        }
                         self.message_producer
                             .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
                                 DecodedBlock {
@@ -199,9 +226,11 @@ impl DecodeWorker {
                             .unwrap();
                         self.playhead += self.block_size;
                     }
-                    for (i, channel) in self.input_buffer.iter_mut().enumerate() {
-                        channel.extend_from_slice(buffer.chan(i));
-                    }
+                    convert_samples_any(
+                        &decoded,
+                        self.input_buffer.as_mut_slice(),
+                        consume_samples..num_frames,
+                    );
                 }
                 Err(symphonia::core::errors::Error::DecodeError(err)) => {
                     warn!("decode error: {}", err)
