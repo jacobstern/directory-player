@@ -6,7 +6,10 @@ use rubato::FftFixedOut;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 
-use self::manager::{ManagerCommand, PlaybackManager};
+use self::{
+    file_stream::FileStream,
+    manager::{ManagerCommand, PlaybackManager},
+};
 
 mod errors;
 mod file_stream;
@@ -25,11 +28,12 @@ pub struct ProcessResampler {
 
 #[allow(clippy::large_enum_variant)]
 pub enum GuiToProcessMsg {
-    StartPlayback(ReadDiskStream<SymphoniaDecoder>, Option<ProcessResampler>),
+    // StartPlayback(ReadDiskStream<SymphoniaDecoder>, Option<ProcessResampler>),
+    StartPlayback(FileStream),
     Pause,
     Resume,
     SetGain(f32),
-    SeekTo(usize),
+    // SeekTo(usize),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -37,8 +41,8 @@ pub enum ProcessToGuiMsg {
     Progress(usize),
     Buffering,
     PlaybackEnded,
-    DisposeResamplerBuffers(ProcessResampler),
-    DidSeek,
+    // DisposeResamplerBuffers(ProcessResampler),
+    // DidSeek,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

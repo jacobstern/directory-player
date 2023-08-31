@@ -6,7 +6,8 @@ use rubato::Resampler;
 
 use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
 
-use super::ProcessResampler;
+use super::file_stream::FileStream;
+use super::{file_stream, ProcessResampler};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PlaybackState {
@@ -15,9 +16,9 @@ pub enum PlaybackState {
 }
 
 pub struct Process {
-    read_disk_stream: Option<ReadDiskStream<SymphoniaDecoder>>,
-    resampler: Option<ProcessResampler>,
-
+    file_stream: Option<FileStream>,
+    // file_stream: Option<ReadDiskStream<SymphoniaDecoder>>,
+    // resampler: Option<ProcessResampler>,
     to_gui_tx: Producer<ProcessToGuiMsg>,
     from_gui_rx: Consumer<GuiToProcessMsg>,
 
@@ -35,9 +36,8 @@ impl Process {
         from_gui_rx: Consumer<GuiToProcessMsg>,
     ) -> Self {
         Self {
-            read_disk_stream: None,
-            resampler: None,
-
+            file_stream: None,
+            // resampler: None,
             to_gui_tx,
             from_gui_rx,
 
@@ -73,9 +73,13 @@ impl Process {
         // Process messages from GUI.
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
-                GuiToProcessMsg::StartPlayback(read_disk_stream, resampler) => {
-                    self.read_disk_stream = Some(read_disk_stream);
-                    self.set_resampler(resampler);
+                // GuiToProcessMsg::StartPlayback(file_stream, resampler) => {
+                //     self.file_stream = Some(file_stream);
+                //     self.set_resampler(resampler);
+                //     self.playback_state = PlaybackState::Playing;
+                // }
+                GuiToProcessMsg::StartPlayback(file_stream) => {
+                    self.file_stream = Some(file_stream);
                     self.playback_state = PlaybackState::Playing;
                 }
                 GuiToProcessMsg::Pause => {
@@ -84,12 +88,12 @@ impl Process {
                 GuiToProcessMsg::Resume => {
                     self.playback_state = PlaybackState::Playing;
                 }
-                GuiToProcessMsg::SeekTo(pos) => {
-                    if let Some(read_disk_stream) = &mut self.read_disk_stream {
-                        read_disk_stream.seek(pos, SeekMode::Auto)?;
-                    }
-                    let _ = self.to_gui_tx.push(ProcessToGuiMsg::DidSeek);
-                }
+                // GuiToProcessMsg::SeekTo(pos) => {
+                //     if let Some(file_stream) = &mut self.file_stream {
+                //         file_stream.seek(pos, SeekMode::Auto)?;
+                //     }
+                //     let _ = self.to_gui_tx.push(ProcessToGuiMsg::DidSeek);
+                // }
                 GuiToProcessMsg::SetGain(gain) => {
                     self.gain = gain;
                 }
@@ -101,131 +105,64 @@ impl Process {
 
         if self.playback_state == PlaybackState::Paused {
             silence(data);
-        } else if let Some(read_disk_stream) = &mut self.read_disk_stream {
-            let num_channels = read_disk_stream.info().num_channels;
+        } else if let Some(file_stream) = &mut self.file_stream {
+            while !data.is_empty() {
+                if !file_stream.is_ready() {
+                    cache_missed_this_cycle = true;
+                    let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
+                    break;
+                }
 
-            if let Some(ProcessResampler {
-                resampler,
-                in_buffer,
-                out_buffer,
-            }) = self.resampler.as_mut()
-            {
-                let requested_frames = resampler.input_frames_next();
-                let mut decoded_frames = 0;
-                let output_frames = resampler.output_frames_next();
+                let read_frames = data.len() / 2;
+                let read_data = file_stream
+                    .read(read_frames)
+                    .expect("there to be available data to read");
+                let chunk_frames = read_data.num_frames();
 
-                while decoded_frames < requested_frames {
-                    if !read_disk_stream.is_ready()? {
-                        cache_missed_this_cycle = true;
-                        let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
-                        break;
+                if read_data.num_channels() == 1 {
+                    let ch = read_data.read_channel(0);
+
+                    for i in 0..chunk_frames {
+                        data[i * 2] = ch[i];
+                        data[i * 2 + 1] = ch[i];
                     }
+                } else if read_data.num_channels() == 2 {
+                    let ch1 = read_data.read_channel(0);
+                    let ch2 = read_data.read_channel(1);
 
-                    let read_data = read_disk_stream.read(requested_frames - decoded_frames)?;
-                    let chunk_frames = read_data.num_frames();
-
-                    for channel in 0..num_channels {
-                        in_buffer[channel as usize][decoded_frames..decoded_frames + chunk_frames]
-                            .copy_from_slice(read_data.read_channel(channel as usize));
-                    }
-
-                    decoded_frames += read_data.num_frames();
-
-                    if read_data.reached_end_of_file() {
-                        reached_end_of_file = true;
-                        break;
+                    for i in 0..chunk_frames {
+                        data[i * 2] = ch1[i];
+                        data[i * 2 + 1] = ch2[i];
                     }
                 }
 
-                if decoded_frames < requested_frames {
-                    for channel in 0..num_channels {
-                        for sample in
-                            &mut in_buffer[channel as usize][decoded_frames..requested_frames]
-                        {
-                            *sample = 0.0;
-                        }
-                    }
-                }
-
-                // TODO: Error handling
-                resampler
-                    .process_into_buffer(in_buffer, out_buffer, None)
-                    .expect("Resampling failure");
-
-                if num_channels == 1 {
-                    for i in 0..output_frames {
-                        data[i * 2] = out_buffer[0][i];
-                        data[i * 2 + 1] = out_buffer[0][i];
-                    }
-                } else {
-                    // Test
-                    for i in 0..output_frames {
-                        data[i * 2] = out_buffer[0][i];
-                        data[i * 2 + 1] = out_buffer[1][i];
-                    }
-                }
-
-                for sample in data.iter_mut() {
+                for sample in &mut data[0..chunk_frames * 2] {
                     *sample *= self.gain;
                 }
-            } else {
-                while !data.is_empty() {
-                    if !read_disk_stream.is_ready()? {
-                        cache_missed_this_cycle = true;
-                        let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
-                        break;
-                    }
 
-                    let read_frames = data.len() / 2;
-                    let read_data = read_disk_stream.read(read_frames)?;
-                    let chunk_frames = read_data.num_frames();
+                data = &mut data[chunk_frames * 2..];
 
-                    if read_data.num_channels() == 1 {
-                        let ch = read_data.read_channel(0);
-
-                        for i in 0..chunk_frames {
-                            data[i * 2] = ch[i];
-                            data[i * 2 + 1] = ch[i];
-                        }
-                    } else if read_data.num_channels() == 2 {
-                        let ch1 = read_data.read_channel(0);
-                        let ch2 = read_data.read_channel(1);
-
-                        for i in 0..chunk_frames {
-                            data[i * 2] = ch1[i];
-                            data[i * 2 + 1] = ch2[i];
-                        }
-                    }
-
-                    for sample in &mut data[0..chunk_frames * 2] {
-                        *sample *= self.gain;
-                    }
-
-                    data = &mut data[chunk_frames * 2..];
-
-                    if read_data.reached_end_of_file() {
-                        reached_end_of_file = true;
-                        break;
-                    }
+                if read_data.reached_end_of_file() {
+                    reached_end_of_file = true;
+                    break;
                 }
-
-                // Fill silence if we have reached the end of the stream
-                silence(data);
             }
+
+            // Fill silence if we have reached the end of the stream
+            silence(data);
 
             let _ = self.to_gui_tx.push(if reached_end_of_file {
                 ProcessToGuiMsg::PlaybackEnded
             } else {
-                ProcessToGuiMsg::Progress(read_disk_stream.playhead())
+                ProcessToGuiMsg::Progress(file_stream.playhead())
             });
         } else {
             silence(data);
         }
 
         if reached_end_of_file {
-            self.read_disk_stream = None;
+            self.file_stream = None;
             self.playback_state = PlaybackState::Paused;
-            self.set_resampler(None);
         }
 
         // When the cache misses, the buffer is filled with silence. So the next
@@ -244,15 +181,6 @@ impl Process {
         self.had_cache_miss_last_cycle = cache_missed_this_cycle;
 
         Ok(())
-    }
-
-    fn set_resampler(&mut self, resampler: Option<ProcessResampler>) {
-        if let Some(resampler) = self.resampler.take() {
-            let _ = self
-                .to_gui_tx
-                .push(ProcessToGuiMsg::DisposeResamplerBuffers(resampler));
-        }
-        self.resampler = resampler;
     }
 }
 

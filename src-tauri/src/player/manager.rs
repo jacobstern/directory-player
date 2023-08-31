@@ -90,9 +90,9 @@ impl PlaybackManager {
                             ProcessToGuiMsg::Buffering => Some(ManagerCommand::Buffering),
                             ProcessToGuiMsg::Progress(pos) => Some(ManagerCommand::Progress(pos)),
                             ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
-                            ProcessToGuiMsg::DidSeek => Some(ManagerCommand::DidSeek),
+                            // ProcessToGuiMsg::DidSeek => Some(ManagerCommand::DidSeek),
                             // Special message, just deallocate the resource
-                            ProcessToGuiMsg::DisposeResamplerBuffers(_) => None,
+                            // ProcessToGuiMsg::DisposeResamplerBuffers(_) => None,
                         };
                         if let Some(command) = manager_command {
                             let result = tx.send(command);
@@ -170,12 +170,13 @@ impl PlaybackManager {
                             warn!("Failed to send gain message to audio thread");
                         })
                 }
-                ManagerCommand::SeekTo(offset) => self
-                    .to_process_tx
-                    .push(GuiToProcessMsg::SeekTo(offset))
-                    .unwrap_or_else(|_| {
-                        error!("Failed to send seek message to audio thread");
-                    }),
+                ManagerCommand::SeekTo(offset) => {}
+            // self
+            //         .to_process_tx
+            //         .push(GuiToProcessMsg::SeekTo(offset))
+            //         .unwrap_or_else(|_| {
+            //             error!("Failed to send seek message to audio thread");
+            //         }),
             }
         }
     }
@@ -239,6 +240,10 @@ impl PlaybackManager {
         //         out_buffer,
         //     });
         // }
+        //
+        //
+        self.to_process_tx
+            .push(GuiToProcessMsg::StartPlayback(file_stream));
 
         // self.stream_frame_count = Some(file_info.num_frames);
         //

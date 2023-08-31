@@ -54,6 +54,7 @@ struct DecodedBlock {
     num_channels: usize,
     num_frames: usize,
     start_frame: usize,
+    playhead: usize,
     is_eof: bool,
     next: Option<Box<DecodedBlock>>,
 }
@@ -108,13 +109,14 @@ impl DecodeWorker {
         let output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
             resampler.output_buffer_allocate(true)
         } else {
-            Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)))
+            input_buffer.clone()
         };
         if decoder.last_decoded().frames() > 0 {
-            let buffer = decoder.last_decoded().make_equivalent();
-            for (i, channel) in input_buffer.iter_mut().enumerate() {
-                channel.extend_from_slice(buffer.chan(i));
-            }
+            convert_samples_any(
+                &decoder.last_decoded(),
+                &mut input_buffer,
+                0..decoder.last_decoded().frames(),
+            );
             trace!("Initial output buffer len: {}", output_buffer[0].len());
         }
         DecodeWorker {
@@ -146,7 +148,7 @@ impl DecodeWorker {
                 {
                     let num_frames = self.input_buffer[0].len();
                     for channel in self.input_buffer.iter_mut() {
-                        channel.resize(self.block_size - channel.len(), 0.0);
+                        channel.resize(self.block_size, 0.0);
                         trace!("Resizing channel to {}", channel.len());
                     }
                     let samples = if let Some(resampler) = self.resampler.as_mut() {
@@ -164,9 +166,10 @@ impl DecodeWorker {
                         .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
                             DecodedBlock {
                                 samples,
+                                num_frames: samples[0].len(),
                                 num_channels: self.num_channels,
-                                num_frames,
                                 start_frame: self.playhead,
+                                playhead: 0,
                                 is_eof: true,
                                 next: None,
                             },
@@ -219,6 +222,7 @@ impl DecodeWorker {
                                     num_channels: self.num_channels,
                                     num_frames,
                                     start_frame: self.playhead,
+                                    playhead: 0,
                                     is_eof: true,
                                     next: None,
                                 },
@@ -244,10 +248,46 @@ impl DecodeWorker {
     }
 }
 
+pub struct ReadData<'a> {
+    data: &'a Vec<Vec<f32>>,
+    len: usize,
+    reached_end_of_file: bool,
+}
+
+impl<'a> ReadData<'a> {
+    pub fn new(data: &'a Vec<Vec<f32>>, len: usize, reached_end_of_file: bool) -> Self {
+        Self {
+            data,
+            len,
+            reached_end_of_file,
+        }
+    }
+
+    pub fn read_channel(&self, channel: usize) -> &[f32] {
+        &self.data[channel][0..self.len]
+    }
+
+    pub fn num_channels(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn num_frames(&self) -> usize {
+        self.len
+    }
+
+    pub fn reached_end_of_file(&self) -> bool {
+        self.reached_end_of_file
+    }
+}
+
+const READ_BUFFER_SIZE: usize = 16384;
+
 pub struct FileStream {
     message_consumer: rtrb::Consumer<DecodeWorkerToFileStreamMessage>,
     blocks: Option<Box<DecodedBlock>>,
-    is_eof: bool,
+    playhead: usize,
+    read_buffer: Vec<Vec<f32>>,
+    num_channels: usize,
 }
 
 impl FileStream {
@@ -327,13 +367,67 @@ impl FileStream {
         Ok(Self {
             message_consumer,
             blocks: None,
-            is_eof: false,
+            playhead: 0,
+            read_buffer: vec![vec![0.0; READ_BUFFER_SIZE]; num_channels],
+            num_channels,
         })
+    }
+
+    pub fn playhead(&self) -> usize {
+        self.playhead
     }
 
     pub fn is_ready(&mut self) -> bool {
         self.poll();
         self.blocks.is_some()
+    }
+
+    pub fn read(&mut self, frames: usize) -> Option<ReadData> {
+        self.poll();
+        if let Some(mut block) = self.blocks.as_mut() {
+            let mut frames_read: usize = 0;
+            let mut is_eof = false;
+            let frames_to_read = frames.min(READ_BUFFER_SIZE);
+            while frames_read < frames_to_read {
+                let available_in_block = block.num_frames - block.playhead;
+                let read_from_block = available_in_block.min(frames_to_read - frames_read);
+
+                for (i, channel) in self.read_buffer.iter_mut().enumerate() {
+                    channel[frames_read..frames_read + read_from_block].copy_from_slice(
+                        &block.samples[i][block.playhead..block.playhead + read_from_block],
+                    );
+                }
+
+                block.playhead += read_from_block;
+                frames_read += read_from_block;
+
+                if read_from_block == available_in_block {
+                    is_eof = block.is_eof;
+                    if block.next.is_none() {
+                        break;
+                    }
+                    block = block.next.as_mut().unwrap();
+                } else {
+                    break;
+                }
+            }
+            while let Some(block) = self.blocks.as_mut() {
+                if block.playhead == block.num_frames {
+                    // TODO: Don't deallocate on audio thread
+                    self.blocks = block.next.take();
+                } else {
+                    break;
+                }
+            }
+            if frames_read > 0 {
+                self.playhead += frames_read;
+                Some(ReadData::new(&self.read_buffer, frames_read, is_eof))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn poll(&mut self) {
