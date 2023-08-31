@@ -6,22 +6,19 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal, SignalSpec};
-use symphonia::core::conv::{FromSample, IntoSample};
+use symphonia::core::conv::IntoSample;
 use symphonia::core::sample::Sample;
 
-pub struct Resampler<T> {
+pub struct Resampler {
     resampler: rubato::FftFixedIn<f32>,
     input: Vec<Vec<f32>>,
     output: Vec<Vec<f32>>,
-    planar: Vec<T>,
+    planar: Vec<f32>,
     duration: usize,
 }
 
-impl<T> Resampler<T>
-where
-    T: Sample + FromSample<f32> + IntoSample<f32>,
-{
-    fn resample_inner(&mut self) -> &[T] {
+impl Resampler {
+    fn resample_inner(&mut self) -> &[f32] {
         {
             let mut input: arrayvec::ArrayVec<&[f32], 32> = Default::default();
 
@@ -46,24 +43,19 @@ where
 
         // Interleave the planar samples from Rubato.
         let num_channels = self.output.len();
+        let num_frames = self.output[0].len();
 
-        self.planar
-            .resize(num_channels * self.output[0].len(), T::MID);
+        self.planar.resize(num_channels * num_frames, 0.0);
 
-        for (i, frame) in self.planar.chunks_exact_mut(num_channels).enumerate() {
-            for (ch, s) in frame.iter_mut().enumerate() {
-                *s = self.output[ch][i].into_sample();
-            }
+        for (i, plane) in self.planar.chunks_exact_mut(num_frames).enumerate() {
+            plane.copy_from_slice(&self.output[i]);
         }
 
         &self.planar
     }
 }
 
-impl<T> Resampler<T>
-where
-    T: Sample + FromSample<f32> + IntoSample<f32>,
-{
+impl Resampler {
     pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
         let duration = duration as usize;
         let num_channels = spec.channels.count();
@@ -93,7 +85,7 @@ where
     /// Resamples a planar/non-planar input.
     ///
     /// Returns the resampled samples in an planar format.
-    pub fn resample(&mut self, input: AudioBufferRef<'_>) -> Option<&[T]> {
+    pub fn resample(&mut self, input: AudioBufferRef<'_>) -> Option<&[f32]> {
         // Copy and convert samples into input buffer.
         convert_samples_any(&input, &mut self.input);
 
@@ -106,7 +98,7 @@ where
     }
 
     /// Resample any remaining samples in the resample buffer.
-    pub fn flush(&mut self) -> Option<&[T]> {
+    pub fn flush(&mut self) -> Option<&[f32]> {
         let len = self.input[0].len();
 
         if len == 0 {
@@ -119,7 +111,7 @@ where
             // Fill each input channel buffer with silence to the next multiple of the resampler
             // duration.
             for channel in self.input.iter_mut() {
-                channel.resize(len + (self.duration - partial_len), f32::MID);
+                channel.resize(len + (self.duration - partial_len), 0.0);
             }
         }
 
