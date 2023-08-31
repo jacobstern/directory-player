@@ -90,42 +90,41 @@ impl DecodeWorker {
         decoder: Box<dyn Decoder>,
         message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
     ) -> Self {
-        let mut maybe_resampler = if sample_rate != target_sample_rate {
-            Some(
-                FftFixedIn::new(
-                    sample_rate as usize,
-                    target_sample_rate as usize,
-                    block_size,
-                    2,
-                    num_channels,
-                )
-                .expect("Faile to create resampler"),
-            )
-        } else {
-            None
-        };
+        // let mut maybe_resampler = if sample_rate != target_sample_rate {
+        //     Some(
+        //         FftFixedIn::new(
+        //             sample_rate as usize,
+        //             target_sample_rate as usize,
+        //             block_size,
+        //             2,
+        //             num_channels,
+        //         )
+        //         .expect("Failed to create resampler"),
+        //     )
+        // } else {
+        //     None
+        // };
         let mut input_buffer =
             Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)));
-        let output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
-            resampler.output_buffer_allocate(true)
-        } else {
-            input_buffer.clone()
-        };
+        // let output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
+        //     resampler.output_buffer_allocate(true)
+        // } else {
+        //     input_buffer.clone()
+        // };
         if decoder.last_decoded().frames() > 0 {
             convert_samples_any(
                 &decoder.last_decoded(),
                 &mut input_buffer,
                 0..decoder.last_decoded().frames(),
             );
-            trace!("Initial output buffer len: {}", output_buffer[0].len());
         }
         DecodeWorker {
             message_producer,
+            output_buffer: input_buffer.clone(),
             input_buffer,
-            output_buffer,
             reader,
             decoder,
-            resampler: maybe_resampler,
+            resampler: None, //  maybe_resampler,
             playhead: 0,
             num_channels,
             block_size,
@@ -165,8 +164,8 @@ impl DecodeWorker {
                     self.message_producer
                         .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
                             DecodedBlock {
-                                samples,
                                 num_frames: samples[0].len(),
+                                samples,
                                 num_channels: self.num_channels,
                                 start_frame: self.playhead,
                                 playhead: 0,
@@ -223,7 +222,7 @@ impl DecodeWorker {
                                     num_frames,
                                     start_frame: self.playhead,
                                     playhead: 0,
-                                    is_eof: true,
+                                    is_eof: false,
                                     next: None,
                                 },
                             )))
