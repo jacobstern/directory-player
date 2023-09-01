@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::path::PathBuf;
 
 use log::{error, trace, warn};
-use rubato::{FftFixedIn, VecResampler};
+use rubato::{FftFixedIn, Resampler};
 use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::conv::IntoSample;
@@ -53,9 +53,9 @@ struct DecodedBlock {
     samples: Vec<Vec<f32>>,
     num_channels: usize,
     num_frames: usize,
-    start_frame: usize,
     playhead: usize,
     is_eof: bool,
+    resample_ratio: f64,
     next: Option<Box<DecodedBlock>>,
 }
 
@@ -75,6 +75,7 @@ struct DecodeWorker {
     num_channels: usize,
     block_size: usize,
     track_id: u32,
+    resample_ratio: f64,
 }
 
 impl DecodeWorker {
@@ -90,27 +91,28 @@ impl DecodeWorker {
         decoder: Box<dyn Decoder>,
         message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
     ) -> Self {
-        // let mut maybe_resampler = if sample_rate != target_sample_rate {
-        //     Some(
-        //         FftFixedIn::new(
-        //             sample_rate as usize,
-        //             target_sample_rate as usize,
-        //             block_size,
-        //             2,
-        //             num_channels,
-        //         )
-        //         .expect("Failed to create resampler"),
-        //     )
-        // } else {
-        //     None
-        // };
+        let resample_ratio = target_sample_rate as f64 / sample_rate as f64;
+        let mut maybe_resampler = if sample_rate != target_sample_rate {
+            Some(
+                FftFixedIn::new(
+                    sample_rate as usize,
+                    target_sample_rate as usize,
+                    block_size,
+                    2,
+                    num_channels,
+                )
+                .expect("Failed to create resampler"),
+            )
+        } else {
+            None
+        };
         let mut input_buffer =
             Vec::from_iter((0..num_channels).map(|_| Vec::with_capacity(block_size)));
-        // let output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
-        //     resampler.output_buffer_allocate(true)
-        // } else {
-        //     input_buffer.clone()
-        // };
+        let output_buffer = if let Some(resampler) = maybe_resampler.as_mut() {
+            resampler.output_buffer_allocate(true)
+        } else {
+            input_buffer.clone()
+        };
         if decoder.last_decoded().frames() > 0 {
             convert_samples_any(
                 &decoder.last_decoded(),
@@ -119,12 +121,13 @@ impl DecodeWorker {
             );
         }
         DecodeWorker {
+            resample_ratio,
             message_producer,
-            output_buffer: input_buffer.clone(),
+            output_buffer,
             input_buffer,
             reader,
             decoder,
-            resampler: None, //  maybe_resampler,
+            resampler: maybe_resampler,
             playhead: 0,
             num_channels,
             block_size,
@@ -164,10 +167,10 @@ impl DecodeWorker {
                     self.message_producer
                         .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
                             DecodedBlock {
-                                num_frames: samples[0].len(),
+                                num_frames: (num_frames as f64 * self.resample_ratio) as usize,
                                 samples,
                                 num_channels: self.num_channels,
-                                start_frame: self.playhead,
+                                resample_ratio: self.resample_ratio,
                                 playhead: 0,
                                 is_eof: true,
                                 next: None,
@@ -187,19 +190,21 @@ impl DecodeWorker {
 
             match self.decoder.decode(&packet) {
                 Ok(decoded) => {
-                    let num_frames = decoded.frames();
-                    if num_frames == 0 {
+                    let input_num_frames = decoded.frames();
+                    if input_num_frames == 0 {
                         continue;
                     }
                     let consume_samples =
-                        (self.block_size - self.input_buffer[0].len()).min(num_frames);
-                    if num_frames + self.input_buffer[0].len() >= self.block_size {
+                        (self.block_size - self.input_buffer[0].len()).min(input_num_frames);
+                    if input_num_frames + self.input_buffer[0].len() >= self.block_size {
                         convert_samples_any(
                             &decoded,
                             self.input_buffer.as_mut_slice(),
                             0..consume_samples,
                         );
+                        let mut output_num_frames = input_num_frames;
                         let samples = if let Some(resampler) = self.resampler.as_mut() {
+                            output_num_frames = resampler.output_frames_next();
                             resampler
                                 .process_into_buffer(
                                     &self.input_buffer,
@@ -219,11 +224,11 @@ impl DecodeWorker {
                                 DecodedBlock {
                                     samples,
                                     num_channels: self.num_channels,
-                                    num_frames,
-                                    start_frame: self.playhead,
+                                    num_frames: output_num_frames,
                                     playhead: 0,
                                     is_eof: false,
                                     next: None,
+                                    resample_ratio: self.resample_ratio,
                                 },
                             )))
                             .unwrap();
@@ -232,7 +237,7 @@ impl DecodeWorker {
                     convert_samples_any(
                         &decoded,
                         self.input_buffer.as_mut_slice(),
-                        consume_samples..num_frames,
+                        consume_samples..input_num_frames,
                     );
                 }
                 Err(symphonia::core::errors::Error::DecodeError(err)) => {
@@ -286,7 +291,6 @@ pub struct FileStream {
     blocks: Option<Box<DecodedBlock>>,
     playhead: usize,
     read_buffer: Vec<Vec<f32>>,
-    num_channels: usize,
 }
 
 impl FileStream {
@@ -368,7 +372,6 @@ impl FileStream {
             blocks: None,
             playhead: 0,
             read_buffer: vec![vec![0.0; READ_BUFFER_SIZE]; num_channels],
-            num_channels,
         })
     }
 
@@ -384,6 +387,7 @@ impl FileStream {
     pub fn read(&mut self, frames: usize) -> Option<ReadData> {
         self.poll();
         if let Some(mut block) = self.blocks.as_mut() {
+            let mut source_frames_read: usize = 0;
             let mut frames_read: usize = 0;
             let mut is_eof = false;
             let frames_to_read = frames.min(READ_BUFFER_SIZE);
@@ -399,6 +403,7 @@ impl FileStream {
 
                 block.playhead += read_from_block;
                 frames_read += read_from_block;
+                source_frames_read += (read_from_block as f64 / block.resample_ratio) as usize;
 
                 if read_from_block == available_in_block {
                     is_eof = block.is_eof;
@@ -419,7 +424,7 @@ impl FileStream {
                 }
             }
             if frames_read > 0 {
-                self.playhead += frames_read;
+                self.playhead += source_frames_read;
                 Some(ReadData::new(&self.read_buffer, frames_read, is_eof))
             } else {
                 None
