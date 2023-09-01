@@ -1,13 +1,15 @@
 use std::{sync::mpsc, thread, time::Duration};
 
 // use creek::{ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
-use log::{error, info, warn};
+use log::{error, info, trace, warn};
 use rtrb::RingBuffer;
 use rubato::{FftFixedOut, Resampler};
 
 use crate::player::{file_stream::FileStream, ProcessResampler, TrackInfo};
 
-use super::{output::Output, GuiToProcessMsg, PlayerEvent, ProcessToGuiMsg};
+use super::{
+    errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlayerEvent, ProcessToGuiMsg,
+};
 
 pub enum ManagerCommand {
     StartPlayback(Vec<String>),
@@ -18,7 +20,8 @@ pub enum ManagerCommand {
     Resume,
     SetVolume(f64),
     SeekTo(usize),
-    DidSeek,
+    OpenFileStreamError(String, FileStreamOpenError),
+    OpenFileStream(String, FileStream),
 }
 
 #[derive(Clone)]
@@ -59,12 +62,11 @@ fn gain_for_volume(volume: f64) -> f32 {
     (amp as f32).min(1.0)
 }
 
-const NUM_CACHE_BLOCKS: usize = 20;
-
 pub struct PlaybackManager {
     output: Output,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
     command_rx: mpsc::Receiver<ManagerCommand>,
+    command_tx: mpsc::Sender<ManagerCommand>,
     stream_frame_count: Option<u64>,
     queue: Option<Queue<String>>,
     event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
@@ -76,6 +78,7 @@ impl PlaybackManager {
         command_tx: mpsc::Sender<ManagerCommand>,
         command_rx: mpsc::Receiver<ManagerCommand>,
     ) -> PlaybackManager {
+        trace!("PlaybackManager::new");
         let (to_gui_tx, mut from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
         let (to_process_tx, from_gui_rx) = RingBuffer::<GuiToProcessMsg>::new(64);
         let output = Output::new(to_gui_tx, from_gui_rx);
@@ -85,14 +88,15 @@ impl PlaybackManager {
             move || {
                 let mut failed_to_send = false;
                 while !failed_to_send {
+                    let mut progress: Option<usize> = None;
                     while let Ok(msg) = from_process_rx.pop() {
                         let manager_command = match msg {
                             ProcessToGuiMsg::Buffering => Some(ManagerCommand::Buffering),
-                            ProcessToGuiMsg::Progress(pos) => Some(ManagerCommand::Progress(pos)),
                             ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
-                            // ProcessToGuiMsg::DidSeek => Some(ManagerCommand::DidSeek),
-                            // Special message, just deallocate the resource
-                            // ProcessToGuiMsg::DisposeResamplerBuffers(_) => None,
+                            ProcessToGuiMsg::Progress(pos) => {
+                                progress = Some(pos);
+                                None
+                            }
                         };
                         if let Some(command) = manager_command {
                             let result = tx.send(command);
@@ -102,8 +106,12 @@ impl PlaybackManager {
                             }
                         }
                     }
+                    if let Some(pos) = progress {
+                        let result = tx.send(ManagerCommand::Progress(pos));
+                        failed_to_send = result.is_err();
+                    }
                     if !failed_to_send {
-                        thread::sleep(Duration::from_millis(10));
+                        thread::sleep(Duration::from_millis(1));
                     }
                 }
             }
@@ -113,6 +121,7 @@ impl PlaybackManager {
             output,
             to_process_tx,
             command_rx,
+            command_tx,
             stream_frame_count: None,
             queue: None,
             event_tx,
@@ -149,12 +158,6 @@ impl PlaybackManager {
                     .unwrap_or_else(|e| {
                         error!("Failed to send Progress event with {e:?}");
                     }),
-                ManagerCommand::DidSeek => self
-                    .event_tx
-                    .blocking_send(PlayerEvent::DidSeek)
-                    .unwrap_or_else(|e| {
-                        error!("Failed to send Seek event with {e:?}");
-                    }),
                 ManagerCommand::PlaybackEnded => {
                     self.queue = self.queue.and_then(|queue| queue.go_next());
                     if let Some(queue) = self.queue.as_ref() {
@@ -177,6 +180,32 @@ impl PlaybackManager {
                             error!("Failed to send seek message to audio thread");
                         });
                 }
+                ManagerCommand::OpenFileStream(path, file_stream) => {
+                    // TODO: Ignore if the user has decided to play a different file
+                    let n_frames = file_stream.n_frames();
+
+                    self.to_process_tx
+                        .push(GuiToProcessMsg::StartPlayback(file_stream))
+                        .unwrap_or_else(|_| {
+                            error!("Failed to send message to start playback to audio thread")
+                        });
+
+                    self.stream_frame_count = n_frames;
+                    if let Some(n) = n_frames {
+                        self.event_tx
+                            .blocking_send(PlayerEvent::Track(TrackInfo {
+                                path,
+                                duration: n as usize,
+                            }))
+                            .unwrap_or_else(|e| {
+                                error!("Failed to send Track event with {e:?}");
+                            });
+                    }
+                }
+                ManagerCommand::OpenFileStreamError(path, e) => {
+                    // TODO: Surface errors to the UI
+                    error!("Failed to open file stream for {path:?}: {e:?}");
+                }
             }
         }
     }
@@ -184,25 +213,13 @@ impl PlaybackManager {
     fn start_stream(&mut self, path: String) {
         info!("Starting stream for {:?}", path);
 
-        // TODO: Handle open failure
-        let file_stream = FileStream::open(path.clone(), self.output.sample_rate)
-            .expect("Failed to create the file stream");
-        let n_frames = file_stream.n_frames();
-
-        self.to_process_tx
-            .push(GuiToProcessMsg::StartPlayback(file_stream))
-            .unwrap_or_else(|_| error!("Failed to send message to start playback to audio thread"));
-
-        self.stream_frame_count = n_frames;
-        if let Some(n) = n_frames {
-            self.event_tx
-                .blocking_send(PlayerEvent::Track(TrackInfo {
-                    path,
-                    duration: n as usize,
-                }))
-                .unwrap_or_else(|e| {
-                    error!("Failed to send Track event with {e:?}");
-                });
-        }
+        let output_sample_rate = self.output.sample_rate;
+        let tx = self.command_tx.clone();
+        thread::spawn(
+            move || match FileStream::open(path.clone(), output_sample_rate) {
+                Ok(file_stream) => tx.send(ManagerCommand::OpenFileStream(path, file_stream)),
+                Err(e) => tx.send(ManagerCommand::OpenFileStreamError(path, e)),
+            },
+        );
     }
 }

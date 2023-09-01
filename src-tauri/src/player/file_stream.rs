@@ -15,6 +15,7 @@ use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStr
 use super::errors::FileStreamOpenError;
 
 const MESSAGE_BUFFER_SIZE: usize = 16384;
+const MIN_BLOCK_SIZE: usize = 1024;
 
 fn convert_samples_any(
     input: &AudioBufferRef<'_>,
@@ -425,7 +426,7 @@ impl FileStream {
 
         let spec = decoded.spec();
         let sample_rate = spec.rate;
-        let block_size = decoded.capacity();
+        let block_size = decoded.capacity().max(MIN_BLOCK_SIZE);
         let num_channels = spec.channels.count();
 
         let (from_worker_producer, from_worker_consumer) =
