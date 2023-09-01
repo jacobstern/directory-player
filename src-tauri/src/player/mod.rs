@@ -28,12 +28,11 @@ pub struct ProcessResampler {
 
 #[allow(clippy::large_enum_variant)]
 pub enum GuiToProcessMsg {
-    // StartPlayback(ReadDiskStream<SymphoniaDecoder>, Option<ProcessResampler>),
     StartPlayback(FileStream),
     Pause,
     Resume,
     SetGain(f32),
-    // SeekTo(usize),
+    SeekTo(usize),
 }
 
 #[allow(clippy::large_enum_variant)]

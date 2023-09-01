@@ -65,7 +65,7 @@ pub struct PlaybackManager {
     output: Output,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
     command_rx: mpsc::Receiver<ManagerCommand>,
-    stream_frame_count: Option<usize>,
+    stream_frame_count: Option<u64>,
     queue: Option<Queue<String>>,
     event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
 }
@@ -170,13 +170,13 @@ impl PlaybackManager {
                             warn!("Failed to send gain message to audio thread");
                         })
                 }
-                ManagerCommand::SeekTo(offset) => {}
-            // self
-            //         .to_process_tx
-            //         .push(GuiToProcessMsg::SeekTo(offset))
-            //         .unwrap_or_else(|_| {
-            //             error!("Failed to send seek message to audio thread");
-            //         }),
+                ManagerCommand::SeekTo(offset) => {
+                    self.to_process_tx
+                        .push(GuiToProcessMsg::SeekTo(offset))
+                        .unwrap_or_else(|_| {
+                            error!("Failed to send seek message to audio thread");
+                        });
+                }
             }
         }
     }
@@ -217,8 +217,9 @@ impl PlaybackManager {
         // let mut process_resampler: Option<ProcessResampler> = None;
         //
 
-        let file_stream = FileStream::open(path, self.output.sample_rate)
+        let file_stream = FileStream::open(path.clone(), self.output.sample_rate)
             .expect("Failed to create the file stream");
+        let n_frames = file_stream.n_frames();
 
         // if sample_rate != self.output.sample_rate {
         //     let num_channels = file_info.num_channels;
@@ -243,9 +244,10 @@ impl PlaybackManager {
         //
         //
         self.to_process_tx
-            .push(GuiToProcessMsg::StartPlayback(file_stream));
+            .push(GuiToProcessMsg::StartPlayback(file_stream))
+            .unwrap_or_else(|_| error!("Failed to send message to start playback to audio thread"));
 
-        // self.stream_frame_count = Some(file_info.num_frames);
+        self.stream_frame_count = n_frames;
         //
         // // Cache the start of the file into cache with index `0`.
         // let _ = read_stream.cache(0, 0);
@@ -254,14 +256,16 @@ impl PlaybackManager {
         // // of the cache with index `0`.
         // read_stream.seek(0, Default::default()).unwrap();
         //
-        // self.event_tx
-        //     .blocking_send(PlayerEvent::Track(TrackInfo {
-        //         path,
-        //         duration: num_frames,
-        //     }))
-        //     .unwrap_or_else(|e| {
-        //         error!("Failed to send Track event with {e:?}");
-        //     });
+        if let Some(n) = n_frames {
+            self.event_tx
+                .blocking_send(PlayerEvent::Track(TrackInfo {
+                    path,
+                    duration: n as usize,
+                }))
+                .unwrap_or_else(|e| {
+                    error!("Failed to send Track event with {e:?}");
+                });
+        }
         //
         // self.to_process_tx
         //     .push(GuiToProcessMsg::StartPlayback(

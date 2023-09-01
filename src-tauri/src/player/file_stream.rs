@@ -1,23 +1,21 @@
 use std::fs::File;
+use std::mem;
 use std::ops::Range;
 use std::path::PathBuf;
 
 use log::{error, trace, warn};
 use rubato::{FftFixedIn, Resampler};
-use symphonia::core::audio::{AudioBuffer, AudioBufferRef, SampleBuffer, Signal};
+use serde::de;
+use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::conv::IntoSample;
+use symphonia::core::formats::{SeekMode, SeekTo};
 use symphonia::core::sample::Sample;
 use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStream, probe::Hint};
 
 use super::errors::FileStreamOpenError;
 
 const MESSAGE_BUFFER_SIZE: usize = 16384;
-
-struct FileStreamServer {
-    reader: Box<dyn FormatReader>,
-    decoder: Box<dyn Decoder>,
-}
 
 fn convert_samples_any(
     input: &AudioBufferRef<'_>,
@@ -51,11 +49,11 @@ where
 #[derive(Debug, Clone)]
 struct DecodedBlock {
     samples: Vec<Vec<f32>>,
-    num_channels: usize,
     num_frames: usize,
     playhead: usize,
     is_eof: bool,
     resample_ratio: f64,
+    stream_id: u32,
     next: Option<Box<DecodedBlock>>,
 }
 
@@ -63,19 +61,26 @@ enum DecodeWorkerToFileStreamMessage {
     Block(Box<DecodedBlock>),
 }
 
+enum FileStreamToDecodeWorkerMessage {
+    DisposeBlock(Box<DecodedBlock>),
+    Seek(usize, u32),
+    Done(Vec<Vec<f32>>),
+}
+
 struct DecodeWorker {
     message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
+    message_consumer: rtrb::Consumer<FileStreamToDecodeWorkerMessage>,
     // TODO: Needs to be SampleBuffer?
     input_buffer: Vec<Vec<f32>>,
     output_buffer: Vec<Vec<f32>>,
     reader: Box<dyn FormatReader>,
     decoder: Box<dyn Decoder>,
     resampler: Option<FftFixedIn<f32>>,
-    playhead: usize,
     num_channels: usize,
     block_size: usize,
     track_id: u32,
     resample_ratio: f64,
+    stream_id: u32,
 }
 
 impl DecodeWorker {
@@ -90,6 +95,7 @@ impl DecodeWorker {
         reader: Box<dyn FormatReader>,
         decoder: Box<dyn Decoder>,
         message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
+        message_consumer: rtrb::Consumer<FileStreamToDecodeWorkerMessage>,
     ) -> Self {
         let resample_ratio = target_sample_rate as f64 / sample_rate as f64;
         let mut maybe_resampler = if sample_rate != target_sample_rate {
@@ -123,21 +129,74 @@ impl DecodeWorker {
         DecodeWorker {
             resample_ratio,
             message_producer,
+            message_consumer,
             output_buffer,
             input_buffer,
             reader,
             decoder,
             resampler: maybe_resampler,
-            playhead: 0,
             num_channels,
             block_size,
             track_id,
+            stream_id: 0,
         }
     }
 
     fn run(mut self) {
-        let res = loop {
-            if self.message_producer.is_full() {
+        let mut is_eof = false;
+        let mut seek_delta: usize = 0;
+        let result: symphonia::core::errors::Result<()> = loop {
+            let mut is_done = false;
+            let poll_result = loop {
+                if let Ok(msg) = self.message_consumer.pop() {
+                    match msg {
+                        FileStreamToDecodeWorkerMessage::Done(_) => {
+                            // trace!("Done message received");
+                            is_done = true;
+                            break Ok(());
+                        }
+                        FileStreamToDecodeWorkerMessage::DisposeBlock(_block) => {
+                            // trace!("Disposing block with length {}", block.samples[0].len());
+                        }
+                        FileStreamToDecodeWorkerMessage::Seek(seek_to, stream_id) => {
+                            match self.reader.seek(
+                                SeekMode::Accurate,
+                                SeekTo::TimeStamp {
+                                    ts: seek_to as u64,
+                                    track_id: self.track_id,
+                                },
+                            ) {
+                                Err(e) => {
+                                    break Err(e);
+                                }
+                                Ok(seeked_to) => {
+                                    self.stream_id = stream_id;
+                                    is_eof = false;
+                                    seek_delta =
+                                        (seeked_to.required_ts - seeked_to.actual_ts) as usize;
+                                    trace!("Found seek delta of {}", seek_delta);
+                                    self.decoder.reset();
+                                    for channel in self.input_buffer.iter_mut() {
+                                        channel.clear();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    break Ok(());
+                }
+            };
+
+            if poll_result.is_err() {
+                break poll_result;
+            }
+
+            if is_done {
+                break Ok(());
+            }
+
+            if is_eof || self.message_producer.is_full() {
                 std::thread::sleep(std::time::Duration::from_millis(1));
                 continue;
             }
@@ -169,15 +228,16 @@ impl DecodeWorker {
                             DecodedBlock {
                                 num_frames: (num_frames as f64 * self.resample_ratio) as usize,
                                 samples,
-                                num_channels: self.num_channels,
                                 resample_ratio: self.resample_ratio,
+                                stream_id: self.stream_id,
                                 playhead: 0,
                                 is_eof: true,
                                 next: None,
                             },
                         )))
                         .unwrap();
-                    break Ok(());
+                    is_eof = true;
+                    continue;
                 }
                 Err(err) => {
                     break Err(err);
@@ -194,15 +254,29 @@ impl DecodeWorker {
                     if input_num_frames == 0 {
                         continue;
                     }
-                    let mut offset = 0;
-                    if input_num_frames + self.input_buffer[0].len() >= self.block_size {
+                    if input_num_frames < seek_delta {
+                        trace!(
+                            "Block of {} frames skipped for seek delta",
+                            input_num_frames
+                        );
+                        seek_delta -= input_num_frames;
+                        continue;
+                    }
+                    let input_frames_consumed = input_num_frames - seek_delta;
+                    let mut input_offset = seek_delta;
+                    if seek_delta > 0 {
+                        trace!("Recuperated remaining {} frames of seek delta", seek_delta);
+                    }
+
+                    seek_delta = 0;
+                    if input_frames_consumed + self.input_buffer[0].len() >= self.block_size {
                         let consume_samples = self.block_size - self.input_buffer[0].len();
-                        offset = consume_samples;
                         convert_samples_any(
                             &decoded,
                             self.input_buffer.as_mut_slice(),
-                            0..consume_samples,
+                            input_offset..consume_samples,
                         );
+                        input_offset = consume_samples;
                         let mut output_num_frames = self.block_size;
                         let samples = if let Some(resampler) = self.resampler.as_mut() {
                             output_num_frames = resampler.output_frames_next();
@@ -224,7 +298,7 @@ impl DecodeWorker {
                             .push(DecodeWorkerToFileStreamMessage::Block(Box::new(
                                 DecodedBlock {
                                     samples,
-                                    num_channels: self.num_channels,
+                                    stream_id: self.stream_id,
                                     num_frames: output_num_frames,
                                     playhead: 0,
                                     is_eof: false,
@@ -233,12 +307,11 @@ impl DecodeWorker {
                                 },
                             )))
                             .unwrap();
-                        self.playhead += self.block_size;
                     }
                     convert_samples_any(
                         &decoded,
                         self.input_buffer.as_mut_slice(),
-                        offset..input_num_frames,
+                        input_offset..input_num_frames,
                     );
                 }
                 Err(symphonia::core::errors::Error::DecodeError(err)) => {
@@ -247,7 +320,7 @@ impl DecodeWorker {
                 Err(err) => break Err(err),
             }
         };
-        if let Err(e) = res {
+        if let Err(e) = result {
             error!("DecodeWorker error: {}", e);
         }
     }
@@ -289,9 +362,12 @@ const READ_BUFFER_SIZE: usize = 16384;
 
 pub struct FileStream {
     message_consumer: rtrb::Consumer<DecodeWorkerToFileStreamMessage>,
+    message_producer: rtrb::Producer<FileStreamToDecodeWorkerMessage>,
     blocks: Option<Box<DecodedBlock>>,
     playhead: usize,
     read_buffer: Vec<Vec<f32>>,
+    stream_id: u32,
+    n_frames: Option<u64>,
 }
 
 impl FileStream {
@@ -320,6 +396,7 @@ impl FileStream {
             .default_track()
             .ok_or(FileStreamOpenError::NoTrackFound)?;
         let track_id = track.id;
+        let n_frames = track.codec_params.n_frames;
 
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions { verify: false })?;
@@ -352,7 +429,9 @@ impl FileStream {
         let block_size = decoded.capacity();
         let num_channels = spec.channels.count();
 
-        let (message_producer, message_consumer) = rtrb::RingBuffer::new(MESSAGE_BUFFER_SIZE);
+        let (from_worker_producer, from_worker_consumer) =
+            rtrb::RingBuffer::new(MESSAGE_BUFFER_SIZE);
+        let (to_worker_producer, to_worker_consumer) = rtrb::RingBuffer::new(MESSAGE_BUFFER_SIZE);
         let worker = DecodeWorker::new(
             target_sample_rate,
             num_channels,
@@ -361,7 +440,8 @@ impl FileStream {
             track_id,
             reader,
             decoder,
-            message_producer,
+            from_worker_producer,
+            to_worker_consumer,
         );
 
         std::thread::spawn(move || {
@@ -369,11 +449,18 @@ impl FileStream {
         });
 
         Ok(Self {
-            message_consumer,
+            message_consumer: from_worker_consumer,
+            message_producer: to_worker_producer,
             blocks: None,
             playhead: 0,
             read_buffer: vec![vec![0.0; READ_BUFFER_SIZE]; num_channels],
+            stream_id: 0,
+            n_frames,
         })
+    }
+
+    pub fn n_frames(&self) -> Option<u64> {
+        self.n_frames
     }
 
     pub fn playhead(&self) -> usize {
@@ -419,7 +506,13 @@ impl FileStream {
             while let Some(block) = self.blocks.as_mut() {
                 if block.playhead == block.num_frames {
                     // TODO: Don't deallocate on audio thread
-                    self.blocks = block.next.take();
+                    let next = block.next.take();
+                    let replaced = mem::replace(&mut self.blocks, next);
+                    let _ =
+                        self.message_producer
+                            .push(FileStreamToDecodeWorkerMessage::DisposeBlock(
+                                replaced.unwrap(),
+                            ));
                 } else {
                     break;
                 }
@@ -431,10 +524,29 @@ impl FileStream {
         }
     }
 
+    pub fn seek(&mut self, seek_to: usize) {
+        self.poll();
+        self.stream_id += 1;
+        // TODO: Don't deallocate on audio thread
+        if let Ok(()) = self
+            .message_producer
+            .push(FileStreamToDecodeWorkerMessage::Seek(
+                seek_to,
+                self.stream_id,
+            ))
+        {
+            self.playhead = seek_to;
+            self.blocks = None;
+        }
+    }
+
     fn poll(&mut self) {
         while let Ok(message) = self.message_consumer.pop() {
             match message {
                 DecodeWorkerToFileStreamMessage::Block(decoded) => {
+                    if decoded.stream_id != self.stream_id {
+                        continue;
+                    }
                     if let Some(mut block) = self.blocks.as_mut() {
                         let last_block = loop {
                             if block.next.is_none() {
@@ -449,5 +561,15 @@ impl FileStream {
                 }
             }
         }
+    }
+}
+
+impl Drop for FileStream {
+    fn drop(&mut self) {
+        let _ = self
+            .message_producer
+            .push(FileStreamToDecodeWorkerMessage::Done(
+                self.read_buffer.drain(..).collect(),
+            ));
     }
 }

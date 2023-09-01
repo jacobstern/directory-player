@@ -17,8 +17,6 @@ pub enum PlaybackState {
 
 pub struct Process {
     file_stream: Option<FileStream>,
-    // file_stream: Option<ReadDiskStream<SymphoniaDecoder>>,
-    // resampler: Option<ProcessResampler>,
     to_gui_tx: Producer<ProcessToGuiMsg>,
     from_gui_rx: Consumer<GuiToProcessMsg>,
 
@@ -63,14 +61,8 @@ impl Process {
     }
 
     fn try_process(&mut self, mut data: &mut [f32]) -> symphonia::core::errors::Result<()> {
-        // Process messages from GUI.
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
-                // GuiToProcessMsg::StartPlayback(file_stream, resampler) => {
-                //     self.file_stream = Some(file_stream);
-                //     self.set_resampler(resampler);
-                //     self.playback_state = PlaybackState::Playing;
-                // }
                 GuiToProcessMsg::StartPlayback(file_stream) => {
                     self.file_stream = Some(file_stream);
                     self.playback_state = PlaybackState::Playing;
@@ -81,12 +73,11 @@ impl Process {
                 GuiToProcessMsg::Resume => {
                     self.playback_state = PlaybackState::Playing;
                 }
-                // GuiToProcessMsg::SeekTo(pos) => {
-                //     if let Some(file_stream) = &mut self.file_stream {
-                //         file_stream.seek(pos, SeekMode::Auto)?;
-                //     }
-                //     let _ = self.to_gui_tx.push(ProcessToGuiMsg::DidSeek);
-                // }
+                GuiToProcessMsg::SeekTo(pos) => {
+                    if let Some(file_stream) = &mut self.file_stream {
+                        file_stream.seek(pos);
+                    }
+                }
                 GuiToProcessMsg::SetGain(gain) => {
                     self.gain = gain;
                 }
