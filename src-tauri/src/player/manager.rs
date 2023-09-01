@@ -1,11 +1,9 @@
 use std::{sync::mpsc, thread, time::Duration};
 
-// use creek::{ReadDiskStream, ReadStreamOptions, SymphoniaDecoder};
-use log::{error, info, trace, warn};
+use log::{error, info};
 use rtrb::RingBuffer;
-use rubato::{FftFixedOut, Resampler};
 
-use crate::player::{file_stream::FileStream, ProcessResampler, TrackInfo};
+use crate::player::{file_stream::FileStream, TrackInfo};
 
 use super::{
     errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlayerEvent, ProcessToGuiMsg,
@@ -78,7 +76,6 @@ impl PlaybackManager {
         command_tx: mpsc::Sender<ManagerCommand>,
         command_rx: mpsc::Receiver<ManagerCommand>,
     ) -> PlaybackManager {
-        trace!("PlaybackManager::new");
         let (to_gui_tx, mut from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
         let (to_process_tx, from_gui_rx) = RingBuffer::<GuiToProcessMsg>::new(64);
         let output = Output::new(to_gui_tx, from_gui_rx);
@@ -141,13 +138,13 @@ impl PlaybackManager {
                     .to_process_tx
                     .push(GuiToProcessMsg::Pause)
                     .unwrap_or_else(|_| {
-                        warn!("Failed to send pause message to audio thread");
+                        error!("Failed to send pause message to audio thread");
                     }),
                 ManagerCommand::Resume => self
                     .to_process_tx
                     .push(GuiToProcessMsg::Resume)
                     .unwrap_or_else(|_| {
-                        warn!("Failed to send resume message to audio thread");
+                        error!("Failed to send resume message to audio thread");
                     }),
                 ManagerCommand::Buffering => {
                     // debug!("Buffering...");
@@ -170,7 +167,7 @@ impl PlaybackManager {
                     self.to_process_tx
                         .push(GuiToProcessMsg::SetGain(gain))
                         .unwrap_or_else(|_| {
-                            warn!("Failed to send gain message to audio thread");
+                            error!("Failed to send gain message to audio thread");
                         })
                 }
                 ManagerCommand::SeekTo(offset) => {
@@ -204,6 +201,7 @@ impl PlaybackManager {
                 }
                 ManagerCommand::OpenFileStreamError(path, e) => {
                     // TODO: Surface errors to the UI
+                    // TODO: Advance the queue
                     error!("Failed to open file stream for {path:?}: {e:?}");
                 }
             }

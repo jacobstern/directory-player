@@ -1,8 +1,6 @@
 use std::thread;
 
-// use creek::{ReadDiskStream, SymphoniaDecoder};
 use log::{error, warn};
-use rubato::FftFixedOut;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 
@@ -16,15 +14,6 @@ mod file_stream;
 mod manager;
 mod output;
 mod process;
-mod resampler;
-
-pub type ResampleBuffer = Vec<Vec<f32>>;
-
-pub struct ProcessResampler {
-    resampler: FftFixedOut<f32>,
-    in_buffer: ResampleBuffer,
-    out_buffer: ResampleBuffer,
-}
 
 #[allow(clippy::large_enum_variant)]
 pub enum GuiToProcessMsg {
@@ -40,8 +29,6 @@ pub enum ProcessToGuiMsg {
     Progress(usize),
     Buffering,
     PlaybackEnded,
-    // DisposeResamplerBuffers(ProcessResampler),
-    // DidSeek,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

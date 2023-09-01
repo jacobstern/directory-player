@@ -2,12 +2,10 @@
 // use creek::{Decoder, ReadDiskStream, SeekMode, SymphoniaDecoder};
 use log::error;
 use rtrb::{Consumer, Producer};
-use rubato::Resampler;
 
 use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
 
 use super::file_stream::FileStream;
-use super::{file_stream, ProcessResampler};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PlaybackState {
@@ -19,12 +17,8 @@ pub struct Process {
     file_stream: Option<FileStream>,
     to_gui_tx: Producer<ProcessToGuiMsg>,
     from_gui_rx: Consumer<GuiToProcessMsg>,
-
     playback_state: PlaybackState,
-    had_cache_miss_last_cycle: bool,
-
     gain: f32,
-
     fatal_error: bool,
 }
 
@@ -35,15 +29,10 @@ impl Process {
     ) -> Self {
         Self {
             file_stream: None,
-            // resampler: None,
             to_gui_tx,
             from_gui_rx,
-
             playback_state: PlaybackState::Paused,
-            had_cache_miss_last_cycle: false,
-
             gain: 0.0,
-
             fatal_error: false,
         }
     }
@@ -84,7 +73,6 @@ impl Process {
             }
         }
 
-        let mut cache_missed_this_cycle = false;
         let mut reached_end_of_file = false;
 
         if self.playback_state == PlaybackState::Paused {
@@ -92,7 +80,6 @@ impl Process {
         } else if let Some(file_stream) = &mut self.file_stream {
             while !data.is_empty() {
                 if !file_stream.is_ready() {
-                    cache_missed_this_cycle = true;
                     let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
                     break;
                 }
@@ -149,20 +136,7 @@ impl Process {
             self.playback_state = PlaybackState::Paused;
         }
 
-        // When the cache misses, the buffer is filled with silence. So the next
-        // buffer after the cache miss is starting from silence. To avoid an audible
-        // pop, apply a ramping gain from 0 up to unity.
-
-        // TODO: Fix this to have a more reasonable behavior
-
-        // if self.had_cache_miss_last_cycle {
-        //     let buffer_size = data.len() as f32;
-        //     for (i, sample) in data.iter_mut().enumerate() {
-        //         *sample *= i as f32 / buffer_size;
-        //     }
-        // }
-
-        self.had_cache_miss_last_cycle = cache_missed_this_cycle;
+        // TODO: Fade in/out audio when buffering?
 
         Ok(())
     }
