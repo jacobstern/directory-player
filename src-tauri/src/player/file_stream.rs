@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use log::{error, trace, warn};
 use rubato::{FftFixedIn, Resampler};
-use serde::de;
 use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::conv::IntoSample;
@@ -505,7 +504,6 @@ impl FileStream {
             }
             while let Some(block) = self.blocks.as_mut() {
                 if block.playhead == block.num_frames {
-                    // TODO: Don't deallocate on audio thread
                     let next = block.next.take();
                     let replaced = mem::replace(&mut self.blocks, next);
                     let _ =
@@ -536,7 +534,12 @@ impl FileStream {
             ))
         {
             self.playhead = seek_to;
-            self.blocks = None;
+            if let Some(block) = self.blocks.take() {
+                let _ = self
+                    .message_producer
+                    .push(FileStreamToDecodeWorkerMessage::DisposeBlock(block));
+            }
+            assert!(self.blocks.is_none());
         }
     }
 

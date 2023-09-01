@@ -182,80 +182,18 @@ impl PlaybackManager {
     }
 
     fn start_stream(&mut self, path: String) {
-        // Setup read stream -------------------------------------------------------------
-
-        // let opts = ReadStreamOptions {
-        //     // The number of prefetch blocks in a cache block. This will cause a cache to be
-        //     // used whenever the stream is seeked to a frame in the range:
-        //     //
-        //     // `[cache_start, cache_start + (num_cache_blocks * block_size))`
-        //     //
-        //     // If this is 0, then the cache is only used when seeked to exactly `cache_start`.
-        //     num_cache_blocks: NUM_CACHE_BLOCKS,
-        //
-        //     // The maximum number of caches that can be active in this stream. Keep in mind each
-        //     // cache uses some memory (but memory is only allocated when the cache is created).
-        //     //
-        //     // The default is `1`.
-        //     num_caches: 1,
-        //
-        //     ..Default::default()
-        // };
-
         info!("Starting stream for {:?}", path);
 
         // TODO: Handle open failure
-        // let mut read_stream =
-        //     ReadDiskStream::<SymphoniaDecoder>::new(path.clone(), 0, opts).unwrap();
-        //
-        // let file_info = read_stream.info();
-        // let num_frames = file_info.num_frames;
-        // let sample_rate = file_info
-        //     .sample_rate
-        //     .expect("No sample rate available for file");
-        //
-        // let mut process_resampler: Option<ProcessResampler> = None;
-        //
-
         let file_stream = FileStream::open(path.clone(), self.output.sample_rate)
             .expect("Failed to create the file stream");
         let n_frames = file_stream.n_frames();
 
-        // if sample_rate != self.output.sample_rate {
-        //     let num_channels = file_info.num_channels;
-        //     let resampler: FftFixedOut<f32> = FftFixedOut::new(
-        //         sample_rate as usize,
-        //         self.output.sample_rate as usize,
-        //         self.output.buffer_size as usize,
-        //         // TODO: Investigate this parameter
-        //         2,
-        //         num_channels as usize,
-        //     )
-        //     // TODO: Error handling
-        //     .expect("Failed to initialize resampler");
-        //     let in_buffer = Resampler::input_buffer_allocate(&resampler, true);
-        //     let out_buffer = Resampler::output_buffer_allocate(&resampler, true);
-        //     process_resampler = Some(ProcessResampler {
-        //         resampler,
-        //         in_buffer,
-        //         out_buffer,
-        //     });
-        // }
-        //
-        //
         self.to_process_tx
             .push(GuiToProcessMsg::StartPlayback(file_stream))
             .unwrap_or_else(|_| error!("Failed to send message to start playback to audio thread"));
 
         self.stream_frame_count = n_frames;
-        //
-        // // Cache the start of the file into cache with index `0`.
-        // let _ = read_stream.cache(0, 0);
-        //
-        // // Tell the stream to seek to the beginning of file. This will also alert the stream to the existence
-        // // of the cache with index `0`.
-        // read_stream.seek(0, Default::default()).unwrap();
-        //
         if let Some(n) = n_frames {
             self.event_tx
                 .blocking_send(PlayerEvent::Track(TrackInfo {
@@ -266,12 +204,5 @@ impl PlaybackManager {
                     error!("Failed to send Track event with {e:?}");
                 });
         }
-        //
-        // self.to_process_tx
-        //     .push(GuiToProcessMsg::StartPlayback(
-        //         read_stream,
-        //         process_resampler,
-        //     ))
-        //     .unwrap();
     }
 }
