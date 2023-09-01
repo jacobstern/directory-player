@@ -21,13 +21,13 @@ serde_json = "1.0"
 # 0b23b6f = seeking fix
 # 8a33286 = upstream
 # 70792bc = seeking fix and file length fix
-creek = { git = "https://github.com/jacobstern/creek", rev = "70792bc", features = [
-  "decode-mp3",
-] }
+# creek = { git = "https://github.com/jacobstern/creek", rev = "70792bc", features = [
+#   "decode-mp3",
+# ] }
 
 # creek = { path = "../../creek/", features = ["decode-mp3"] }
 rtrb = "0.2.3"
-symphonia = "0.5.3"
+symphonia = { version = "0.5.3", features = ["mp3"] }
 log = "0.4.20"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "5b814f5" }
 rubato = "0.14.1"

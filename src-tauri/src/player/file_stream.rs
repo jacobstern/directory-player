@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use log::{error, trace, warn};
 use rubato::{FftFixedIn, Resampler};
-use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
+use symphonia::core::audio::{AudioBuffer, AudioBufferRef, SampleBuffer, Signal};
 use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::conv::IntoSample;
 use symphonia::core::sample::Sample;
@@ -194,15 +194,16 @@ impl DecodeWorker {
                     if input_num_frames == 0 {
                         continue;
                     }
-                    let consume_samples =
-                        (self.block_size - self.input_buffer[0].len()).min(input_num_frames);
+                    let mut offset = 0;
                     if input_num_frames + self.input_buffer[0].len() >= self.block_size {
+                        let consume_samples = self.block_size - self.input_buffer[0].len();
+                        offset = consume_samples;
                         convert_samples_any(
                             &decoded,
                             self.input_buffer.as_mut_slice(),
                             0..consume_samples,
                         );
-                        let mut output_num_frames = input_num_frames;
+                        let mut output_num_frames = self.block_size;
                         let samples = if let Some(resampler) = self.resampler.as_mut() {
                             output_num_frames = resampler.output_frames_next();
                             resampler
@@ -237,7 +238,7 @@ impl DecodeWorker {
                     convert_samples_any(
                         &decoded,
                         self.input_buffer.as_mut_slice(),
-                        consume_samples..input_num_frames,
+                        offset..input_num_frames,
                     );
                 }
                 Err(symphonia::core::errors::Error::DecodeError(err)) => {
@@ -423,12 +424,8 @@ impl FileStream {
                     break;
                 }
             }
-            if frames_read > 0 {
-                self.playhead += source_frames_read;
-                Some(ReadData::new(&self.read_buffer, frames_read, is_eof))
-            } else {
-                None
-            }
+            self.playhead += source_frames_read;
+            Some(ReadData::new(&self.read_buffer, frames_read, is_eof))
         } else {
             None
         }

@@ -1,5 +1,5 @@
-use creek::read::ReadError;
-use creek::{Decoder, ReadDiskStream, SeekMode, SymphoniaDecoder};
+// use creek::read::ReadError;
+// use creek::{Decoder, ReadDiskStream, SeekMode, SymphoniaDecoder};
 use log::error;
 use rtrb::{Consumer, Producer};
 use rubato::Resampler;
@@ -57,19 +57,12 @@ impl Process {
         }
 
         if let Err(e) = self.try_process(data) {
-            if matches!(e, ReadError::FatalError(_)) {
-                self.fatal_error = true;
-            }
-
             error!("{:?}", e);
             silence(data);
         }
     }
 
-    fn try_process(
-        &mut self,
-        mut data: &mut [f32],
-    ) -> Result<(), ReadError<<SymphoniaDecoder as Decoder>::FatalError>> {
+    fn try_process(&mut self, mut data: &mut [f32]) -> symphonia::core::errors::Result<()> {
         // Process messages from GUI.
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
@@ -116,7 +109,7 @@ impl Process {
                 let read_frames = data.len() / 2;
                 let read_data = file_stream
                     .read(read_frames)
-                    .expect("there to be available data to read");
+                    .expect("Expected there to be available data to read");
                 let chunk_frames = read_data.num_frames();
 
                 if read_data.num_channels() == 1 {
