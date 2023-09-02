@@ -568,6 +568,11 @@ impl FileStream {
 
 impl Drop for FileStream {
     fn drop(&mut self) {
+        if let Some(block) = self.blocks.take() {
+            let _ = self
+                .message_producer
+                .push(FileStreamToDecodeWorkerMessage::DisposeBlock(block));
+        }
         let _ = self
             .message_producer
             .push(FileStreamToDecodeWorkerMessage::Done(
