@@ -26,7 +26,7 @@ pub enum GuiToProcessMsg {
 
 #[allow(clippy::large_enum_variant)]
 pub enum ProcessToGuiMsg {
-    Progress(usize),
+    PlaybackPos(usize),
     Buffering,
     PlaybackEnded,
 }

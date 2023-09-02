@@ -90,7 +90,7 @@ impl PlaybackManager {
                         let manager_command = match msg {
                             ProcessToGuiMsg::Buffering => Some(ManagerCommand::Buffering),
                             ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
-                            ProcessToGuiMsg::Progress(pos) => {
+                            ProcessToGuiMsg::PlaybackPos(pos) => {
                                 progress = Some(pos);
                                 None
                             }

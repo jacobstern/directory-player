@@ -65,6 +65,9 @@ impl Process {
                 GuiToProcessMsg::SeekTo(pos) => {
                     if let Some(file_stream) = &mut self.file_stream {
                         file_stream.seek(pos);
+                        let _ = self
+                            .to_gui_tx
+                            .push(ProcessToGuiMsg::PlaybackPos(file_stream.playhead()));
                     }
                 }
                 GuiToProcessMsg::SetGain(gain) => {
@@ -122,11 +125,12 @@ impl Process {
             // Fill silence if we have reached the end of the stream
             silence(data);
 
-            let _ = self.to_gui_tx.push(if reached_end_of_file {
-                ProcessToGuiMsg::PlaybackEnded
-            } else {
-                ProcessToGuiMsg::Progress(file_stream.playhead())
-            });
+            let _ = self
+                .to_gui_tx
+                .push(ProcessToGuiMsg::PlaybackPos(file_stream.playhead()));
+            if reached_end_of_file {
+                let _ = self.to_gui_tx.push(ProcessToGuiMsg::PlaybackEnded);
+            }
         } else {
             silence(data);
         }
