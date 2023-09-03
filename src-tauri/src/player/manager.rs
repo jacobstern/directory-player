@@ -1,6 +1,10 @@
-use std::{sync::mpsc, thread, time::Duration};
+use std::{
+    sync::mpsc::{self, Sender},
+    thread,
+    time::Duration,
+};
 
-use log::{error, info};
+use log::{error, info, trace, warn};
 use rtrb::RingBuffer;
 
 use crate::player::{file_stream::FileStream, TrackInfo};
@@ -14,7 +18,6 @@ pub enum ManagerCommand {
     Pause,
     Progress(usize),
     PlaybackEnded,
-    Buffering,
     Resume,
     SetVolume(f64),
     SeekTo(usize),
@@ -60,6 +63,11 @@ fn gain_for_volume(volume: f64) -> f32 {
     (amp as f32).min(1.0)
 }
 
+struct CurrentPlayback {
+    playback_id: u64,
+    file_path: String,
+}
+
 pub struct PlaybackManager {
     output: Output,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
@@ -68,6 +76,41 @@ pub struct PlaybackManager {
     stream_frame_count: Option<u64>,
     queue: Option<Queue<String>>,
     event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
+    current_playback: Option<CurrentPlayback>,
+    next_playback_id: u64,
+}
+
+fn poll_process_to_gui_message(
+    command_tx: Sender<ManagerCommand>,
+    mut from_process_rx: rtrb::Consumer<ProcessToGuiMsg>,
+) {
+    let mut failed_to_send = false;
+    while !failed_to_send {
+        let mut progress: Option<usize> = None;
+        while let Ok(msg) = from_process_rx.pop() {
+            let manager_command = match msg {
+                ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
+                ProcessToGuiMsg::PlaybackPos(pos) => {
+                    progress = Some(pos);
+                    None
+                }
+            };
+            if let Some(command) = manager_command {
+                let result = command_tx.send(command);
+                failed_to_send = result.is_err();
+                if failed_to_send {
+                    break;
+                }
+            }
+        }
+        if let Some(pos) = progress {
+            let result = command_tx.send(ManagerCommand::Progress(pos));
+            failed_to_send = result.is_err();
+        }
+        if !failed_to_send {
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
 }
 
 impl PlaybackManager {
@@ -76,41 +119,14 @@ impl PlaybackManager {
         command_tx: mpsc::Sender<ManagerCommand>,
         command_rx: mpsc::Receiver<ManagerCommand>,
     ) -> PlaybackManager {
-        let (to_gui_tx, mut from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
+        let (to_gui_tx, from_process_rx) = RingBuffer::<ProcessToGuiMsg>::new(256);
         let (to_process_tx, from_gui_rx) = RingBuffer::<GuiToProcessMsg>::new(64);
         let output = Output::new(to_gui_tx, from_gui_rx);
 
         thread::spawn({
             let tx = command_tx.clone();
             move || {
-                let mut failed_to_send = false;
-                while !failed_to_send {
-                    let mut progress: Option<usize> = None;
-                    while let Ok(msg) = from_process_rx.pop() {
-                        let manager_command = match msg {
-                            ProcessToGuiMsg::Buffering => Some(ManagerCommand::Buffering),
-                            ProcessToGuiMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
-                            ProcessToGuiMsg::PlaybackPos(pos) => {
-                                progress = Some(pos);
-                                None
-                            }
-                        };
-                        if let Some(command) = manager_command {
-                            let result = tx.send(command);
-                            failed_to_send = result.is_err();
-                            if failed_to_send {
-                                break;
-                            }
-                        }
-                    }
-                    if let Some(pos) = progress {
-                        let result = tx.send(ManagerCommand::Progress(pos));
-                        failed_to_send = result.is_err();
-                    }
-                    if !failed_to_send {
-                        thread::sleep(Duration::from_millis(1));
-                    }
-                }
+                poll_process_to_gui_message(tx, from_process_rx);
             }
         });
 
@@ -122,6 +138,8 @@ impl PlaybackManager {
             stream_frame_count: None,
             queue: None,
             event_tx,
+            current_playback: None,
+            next_playback_id: 0,
         }
     }
 
@@ -131,7 +149,7 @@ impl PlaybackManager {
                 ManagerCommand::StartPlayback(file_paths) => {
                     self.queue = Queue::from_vec(file_paths);
                     if let Some(queue) = self.queue.as_ref() {
-                        self.start_stream(queue.current().to_owned());
+                        self.start_playback(queue.current().to_owned());
                     }
                 }
                 ManagerCommand::Pause => self
@@ -146,9 +164,6 @@ impl PlaybackManager {
                     .unwrap_or_else(|_| {
                         error!("Failed to send resume message to audio thread");
                     }),
-                ManagerCommand::Buffering => {
-                    // debug!("Buffering...");
-                }
                 ManagerCommand::Progress(pos) => self
                     .event_tx
                     .blocking_send(PlayerEvent::Progress(pos))
@@ -156,14 +171,10 @@ impl PlaybackManager {
                         error!("Failed to send Progress event with {e:?}");
                     }),
                 ManagerCommand::PlaybackEnded => {
-                    self.queue = self.queue.and_then(|queue| queue.go_next());
-                    if let Some(queue) = self.queue.as_ref() {
-                        self.start_stream(queue.current().to_owned());
-                    }
+                    self.play_next();
                 }
                 ManagerCommand::SetVolume(volume) => {
                     let gain = gain_for_volume(volume);
-                    info!("Setting gain {gain:?}");
                     self.to_process_tx
                         .push(GuiToProcessMsg::SetGain(gain))
                         .unwrap_or_else(|_| {
@@ -179,7 +190,9 @@ impl PlaybackManager {
                 }
                 ManagerCommand::OpenFileStream(path, file_stream) => {
                     // TODO: Ignore if the user has decided to play a different file
+
                     let n_frames = file_stream.n_frames();
+                    self.stream_frame_count = n_frames;
 
                     self.to_process_tx
                         .push(GuiToProcessMsg::StartPlayback(file_stream))
@@ -187,7 +200,6 @@ impl PlaybackManager {
                             error!("Failed to send message to start playback to audio thread")
                         });
 
-                    self.stream_frame_count = n_frames;
                     if let Some(n) = n_frames {
                         self.event_tx
                             .blocking_send(PlayerEvent::Track(TrackInfo {
@@ -208,8 +220,18 @@ impl PlaybackManager {
         }
     }
 
-    fn start_stream(&mut self, path: String) {
+    fn play_next(&mut self) {
+        self.queue = self.queue.take().and_then(|queue| queue.go_next());
+        if let Some(queue) = self.queue.as_ref() {
+            self.start_playback(queue.current().to_owned());
+        }
+    }
+
+    fn start_playback(&mut self, path: String) {
         info!("Starting stream for {:?}", path);
+
+        let playback_id = self.next_playback_id;
+        self.next_playback_id += 1;
 
         let output_sample_rate = self.output.sample_rate;
         let tx = self.command_tx.clone();

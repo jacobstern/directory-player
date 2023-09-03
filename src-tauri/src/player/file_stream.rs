@@ -208,7 +208,7 @@ impl DecodeWorker {
                     let num_frames = self.input_buffer[0].len();
                     for channel in self.input_buffer.iter_mut() {
                         channel.resize(self.block_size, 0.0);
-                        trace!("Resizing channel to {}", channel.len());
+                        trace!("Resizing channel from {} to {}", num_frames, channel.len());
                     }
                     let samples = if let Some(resampler) = self.resampler.as_mut() {
                         resampler
@@ -379,7 +379,7 @@ impl FileStream {
             hint.with_extension(extension.to_str().unwrap());
         }
 
-        let source = Box::new(File::open(file)?);
+        let source = Box::new(File::open(file.clone())?);
         let mss = MediaSourceStream::new(source, Default::default());
 
         let probed = symphonia::default::get_probe().format(
@@ -420,7 +420,7 @@ impl FileStream {
             }
         }?;
 
-        trace!("First decoded frames: {}", decoded.frames());
+        trace!("First packet decoded frames: {}", decoded.frames());
 
         let spec = decoded.spec();
         let sample_rate = spec.rate;
@@ -443,6 +443,7 @@ impl FileStream {
         );
 
         std::thread::spawn(move || {
+            trace!("Starting decode worker for {file:?}");
             worker.run();
         });
 

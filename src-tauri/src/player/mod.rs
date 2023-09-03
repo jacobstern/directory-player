@@ -24,10 +24,9 @@ pub enum GuiToProcessMsg {
     SeekTo(usize),
 }
 
-#[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum ProcessToGuiMsg {
     PlaybackPos(usize),
-    Buffering,
     PlaybackEnded,
 }
 

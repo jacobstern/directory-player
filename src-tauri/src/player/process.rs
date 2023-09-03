@@ -83,7 +83,7 @@ impl Process {
         } else if let Some(file_stream) = &mut self.file_stream {
             while !data.is_empty() {
                 if !file_stream.is_ready() {
-                    let _ = self.to_gui_tx.push(ProcessToGuiMsg::Buffering);
+                    // Buffering...
                     break;
                 }
 
