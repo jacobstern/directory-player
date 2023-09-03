@@ -15,7 +15,7 @@ use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStr
 use super::errors::FileStreamOpenError;
 
 const MESSAGE_BUFFER_SIZE: usize = 16384;
-const MIN_BLOCK_SIZE: usize = 1024;
+const MIN_BLOCK_SIZE: usize = 8192;
 
 fn convert_samples_any(
     input: &AudioBufferRef<'_>,
@@ -55,6 +55,17 @@ struct DecodedBlock {
     resample_ratio: f64,
     stream_id: u32,
     next: Option<Box<DecodedBlock>>,
+    len: usize,
+}
+
+impl Drop for DecodedBlock {
+    fn drop(&mut self) {
+        // Avoid stack overflow for large linked list
+        let mut curr = self.next.take();
+        while let Some(mut next) = curr {
+            curr = next.next.take();
+        }
+    }
 }
 
 enum DecodeWorkerToFileStreamMessage {
@@ -153,8 +164,10 @@ impl DecodeWorker {
                             is_done = true;
                             break Ok(());
                         }
-                        FileStreamToDecodeWorkerMessage::DisposeBlock(_block) => {
-                            // trace!("Disposing block with length {}", block.samples[0].len());
+                        FileStreamToDecodeWorkerMessage::DisposeBlock(block) => {
+                            if block.len > 1 {
+                                trace!("Disposing block with len {}", block.len);
+                            }
                         }
                         FileStreamToDecodeWorkerMessage::Seek(seek_to, stream_id) => {
                             match self.reader.seek(
@@ -231,6 +244,7 @@ impl DecodeWorker {
                                 playhead: 0,
                                 is_eof: true,
                                 next: None,
+                                len: 1,
                             },
                         )))
                         .unwrap();
@@ -302,6 +316,7 @@ impl DecodeWorker {
                                     is_eof: false,
                                     next: None,
                                     resample_ratio: self.resample_ratio,
+                                    len: 1,
                                 },
                             )))
                             .unwrap();
@@ -505,6 +520,7 @@ impl FileStream {
             while let Some(block) = self.blocks.as_mut() {
                 if block.playhead == block.num_frames {
                     let next = block.next.take();
+                    block.len = 1;
                     let replaced = mem::replace(&mut self.blocks, next);
                     let _ =
                         self.message_producer
@@ -552,6 +568,7 @@ impl FileStream {
                     }
                     if let Some(mut block) = self.blocks.as_mut() {
                         let last_block = loop {
+                            block.len += 1;
                             if block.next.is_none() {
                                 break block;
                             }
