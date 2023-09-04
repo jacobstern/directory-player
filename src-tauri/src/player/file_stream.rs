@@ -15,7 +15,7 @@ use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStr
 use super::errors::FileStreamOpenError;
 
 const MESSAGE_BUFFER_SIZE: usize = 16384;
-const MIN_BLOCK_SIZE: usize = 8192;
+const MIN_BLOCK_SIZE: usize = 1024;
 
 fn convert_samples_any(
     input: &AudioBufferRef<'_>,
@@ -55,6 +55,7 @@ struct DecodedBlock {
     resample_ratio: f64,
     stream_id: u32,
     next: Option<Box<DecodedBlock>>,
+    /// Number of blocks in the linked list
     len: usize,
 }
 
@@ -219,9 +220,9 @@ impl DecodeWorker {
                         && err.to_string() == "end of stream" =>
                 {
                     let num_frames = self.input_buffer[0].len();
+                    trace!("Resizing buffer from {} to {}", num_frames, self.block_size);
                     for channel in self.input_buffer.iter_mut() {
                         channel.resize(self.block_size, 0.0);
-                        trace!("Resizing channel from {} to {}", num_frames, channel.len());
                     }
                     let samples = if let Some(resampler) = self.resampler.as_mut() {
                         resampler
@@ -518,7 +519,8 @@ impl FileStream {
                 }
             }
             while let Some(block) = self.blocks.as_mut() {
-                if block.playhead == block.num_frames {
+                // Empty EOF marker block needs to be preserved
+                if block.playhead == block.num_frames && (!block.is_eof || is_eof) {
                     let next = block.next.take();
                     block.len = 1;
                     let replaced = mem::replace(&mut self.blocks, next);
