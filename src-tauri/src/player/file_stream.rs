@@ -10,6 +10,7 @@ use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::conv::IntoSample;
 use symphonia::core::formats::{SeekMode, SeekTo};
 use symphonia::core::sample::Sample;
+use symphonia::core::units::TimeBase;
 use symphonia::core::{codecs::Decoder, formats::FormatReader, io::MediaSourceStream, probe::Hint};
 
 use super::errors::FileStreamOpenError;
@@ -382,6 +383,7 @@ pub struct FileStream {
     read_buffer: Vec<Vec<f32>>,
     stream_id: u32,
     n_frames: Option<u64>,
+    time_base: Option<TimeBase>,
 }
 
 impl FileStream {
@@ -411,6 +413,7 @@ impl FileStream {
             .ok_or(FileStreamOpenError::NoTrackFound)?;
         let track_id = track.id;
         let n_frames = track.codec_params.n_frames;
+        let time_base = track.codec_params.time_base;
 
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions { verify: false })?;
@@ -471,11 +474,16 @@ impl FileStream {
             read_buffer: vec![vec![0.0; READ_BUFFER_SIZE]; num_channels],
             stream_id: 0,
             n_frames,
+            time_base,
         })
     }
 
     pub fn n_frames(&self) -> Option<u64> {
         self.n_frames
+    }
+
+    pub fn time_base(&self) -> Option<&TimeBase> {
+        self.time_base.as_ref()
     }
 
     pub fn playhead(&self) -> usize {

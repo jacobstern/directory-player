@@ -8,8 +8,8 @@ use player::{Player, PlayerEvent};
 use serde::Serialize;
 use std::fs::{DirEntry, ReadDir};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use tauri::{async_runtime, Manager};
+use std::sync::Mutex;
+use tauri::{async_runtime, AppHandle, Manager};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type")]
@@ -34,7 +34,7 @@ struct TreeviewView {
     listing: Vec<TreeviewItem>,
 }
 
-struct PlayerState(Arc<Mutex<Player>>);
+struct PlayerState(Mutex<Player>);
 
 struct FileNameAndPath {
     name: String,
@@ -165,15 +165,19 @@ async fn show_main_window(window: tauri::Window) {
     window.get_window("main").unwrap().show().unwrap();
 }
 
+fn try_emit_all<S: Serialize + Clone>(app_handle: &AppHandle, event: &str, payload: S) {
+    app_handle.emit_all(event, payload).unwrap_or_else(|e| {
+        error!("Failed to emit {event} with {e:?}");
+    });
+}
+
 fn main() {
     let (player_event_tx, mut player_event_rx) = async_runtime::channel(1024);
-
     let player = Player::new(player_event_tx);
-    let shared_player = Arc::new(Mutex::new(player));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
-        .manage(PlayerState(shared_player))
+        .manage(PlayerState(Mutex::new(player)))
         .invoke_handler(tauri::generate_handler![
             treeview_get_view,
             treeview_expand_directory,
@@ -186,26 +190,26 @@ fn main() {
             show_main_window
         ])
         .setup(|app| {
-            let handle = app.handle();
+            let app_handle = app.handle();
             async_runtime::spawn(async move {
                 while let Some(msg) = player_event_rx.recv().await {
                     match msg {
                         PlayerEvent::Progress(progress) => {
-                            handle
+                            app_handle
                                 .emit_all("player:progress", progress)
                                 .unwrap_or_else(|e| {
                                     error!("Failed to emit player:progress with {e:?}");
                                 });
                         }
                         PlayerEvent::Track(track) => {
-                            handle.emit_all("player:track", track).unwrap_or_else(|e| {
-                                error!("Failed to emit player:track with {e:?}");
-                            });
+                            app_handle
+                                .emit_all("player:track", track)
+                                .unwrap_or_else(|e| {
+                                    error!("Failed to emit player:track with {e:?}");
+                                });
                         }
-                        PlayerEvent::DidSeek => {
-                            handle.emit_all("player:didseek", ()).unwrap_or_else(|e| {
-                                error!("Failed to emit player:didseek with {e:?}");
-                            });
+                        PlayerEvent::PlaybackFileChange(file) => {
+                            try_emit_all(&app_handle, "player:playbackFileChange", file);
                         }
                     }
                 }

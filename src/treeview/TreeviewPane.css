@@ -1,4 +1,5 @@
 .treeview-pane {
+  position: relative;
   display: flex;
   flex-flow: column;
   min-height: 0;

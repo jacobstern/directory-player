@@ -1,13 +1,9 @@
-use std::{
-    sync::mpsc::{self, Sender},
-    thread,
-    time::Duration,
-};
+use std::{path::Path, sync::mpsc, thread, time::Duration};
 
-use log::{error, info, trace, warn};
+use log::{error, info};
 use rtrb::RingBuffer;
 
-use crate::player::{file_stream::FileStream, TrackInfo};
+use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
 
 use super::{
     errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlayerEvent, ProcessToGuiMsg,
@@ -21,8 +17,8 @@ pub enum ManagerCommand {
     Resume,
     SetVolume(f64),
     SeekTo(usize),
-    OpenFileStreamError(String, FileStreamOpenError),
-    OpenFileStream(String, FileStream),
+    OpenFileStreamError(u64, String, FileStreamOpenError),
+    OpenFileStream(u64, String, FileStream),
 }
 
 #[derive(Clone)]
@@ -40,6 +36,10 @@ impl<T> Queue<T> {
         }
     }
 
+    pub fn has_previous(&self) -> bool {
+        self.index > 0
+    }
+
     pub fn current(&self) -> &T {
         &self.elements[self.index]
     }
@@ -48,6 +48,17 @@ impl<T> Queue<T> {
         if self.index + 1 < self.elements.len() {
             Some(Queue {
                 index: self.index + 1,
+                elements: self.elements,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn go_previous(self) -> Option<Queue<T>> {
+        if self.has_previous() {
+            Some(Queue {
+                index: self.index - 1,
                 elements: self.elements,
             })
         } else {
@@ -81,7 +92,7 @@ pub struct PlaybackManager {
 }
 
 fn poll_process_to_gui_message(
-    command_tx: Sender<ManagerCommand>,
+    command_tx: mpsc::Sender<ManagerCommand>,
     mut from_process_rx: rtrb::Consumer<ProcessToGuiMsg>,
 ) {
     let mut failed_to_send = false;
@@ -188,12 +199,18 @@ impl PlaybackManager {
                             error!("Failed to send seek message to audio thread");
                         });
                 }
-                ManagerCommand::OpenFileStream(path, file_stream) => {
-                    // TODO: Ignore if the user has decided to play a different file
+                ManagerCommand::OpenFileStream(playback_id, path, file_stream) => {
+                    if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
+                        info!(
+                            "Ignoring stream for {:?} as it is no longer the current playback",
+                            path
+                        );
+                        continue;
+                    }
 
                     let n_frames = file_stream.n_frames();
-                    self.stream_frame_count = n_frames;
 
+                    self.stream_frame_count = n_frames;
                     self.to_process_tx
                         .push(GuiToProcessMsg::StartPlayback(file_stream))
                         .unwrap_or_else(|_| {
@@ -211,10 +228,19 @@ impl PlaybackManager {
                             });
                     }
                 }
-                ManagerCommand::OpenFileStreamError(path, e) => {
+                ManagerCommand::OpenFileStreamError(playback_id, path, e) => {
+                    if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
+                        info!(
+                            "Ignoring open stream error for {:?} as it is no longer the current playback",
+                            path
+                        );
+                        continue;
+                    }
+
                     // TODO: Surface errors to the UI
-                    // TODO: Advance the queue
                     error!("Failed to open file stream for {path:?}: {e:?}");
+
+                    self.play_next();
                 }
             }
         }
@@ -224,6 +250,9 @@ impl PlaybackManager {
         self.queue = self.queue.take().and_then(|queue| queue.go_next());
         if let Some(queue) = self.queue.as_ref() {
             self.start_playback(queue.current().to_owned());
+        } else {
+            self.current_playback = None;
+            self.try_send_event(PlayerEvent::PlaybackFileChange(None));
         }
     }
 
@@ -231,15 +260,38 @@ impl PlaybackManager {
         info!("Starting stream for {:?}", path);
 
         let playback_id = self.next_playback_id;
+
         self.next_playback_id += 1;
+        self.current_playback = Some(CurrentPlayback {
+            playback_id,
+            file_path: path.clone(),
+        });
+
+        let os_path = Path::new(&path);
+        let file_name = os_path.file_name().unwrap().to_str().unwrap().to_owned();
+
+        self.try_send_event(PlayerEvent::PlaybackFileChange(Some(PlaybackFile {
+            path: path.clone(),
+            name: file_name,
+        })));
 
         let output_sample_rate = self.output.sample_rate;
         let tx = self.command_tx.clone();
         thread::spawn(
             move || match FileStream::open(path.clone(), output_sample_rate) {
-                Ok(file_stream) => tx.send(ManagerCommand::OpenFileStream(path, file_stream)),
-                Err(e) => tx.send(ManagerCommand::OpenFileStreamError(path, e)),
+                Ok(file_stream) => tx.send(ManagerCommand::OpenFileStream(
+                    playback_id,
+                    path,
+                    file_stream,
+                )),
+                Err(e) => tx.send(ManagerCommand::OpenFileStreamError(playback_id, path, e)),
             },
         );
+    }
+
+    fn try_send_event(&mut self, event: PlayerEvent) {
+        if let Err(e) = self.event_tx.blocking_send(event.clone()) {
+            error!("Failed to send {event:?} from the manager with {e:?}");
+        }
     }
 }

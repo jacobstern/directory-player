@@ -15,7 +15,6 @@ mod manager;
 mod output;
 mod process;
 
-#[allow(clippy::large_enum_variant)]
 pub enum GuiToProcessMsg {
     StartPlayback(FileStream),
     Pause,
@@ -37,10 +36,16 @@ pub struct TrackInfo {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PlaybackFile {
+    path: String,
+    name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PlayerEvent {
     Progress(usize),
     Track(TrackInfo),
-    DidSeek,
+    PlaybackFileChange(Option<PlaybackFile>),
 }
 
 pub struct Player {
