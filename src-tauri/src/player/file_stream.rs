@@ -264,6 +264,8 @@ impl DecodeWorker {
 
             match self.decoder.decode(&packet) {
                 Ok(decoded) => {
+                    // TODO: Copy interleaved samples to output directly
+
                     let input_num_frames = decoded.frames();
                     if input_num_frames == 0 {
                         continue;

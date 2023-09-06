@@ -1,9 +1,0 @@
-.playing-indicator {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
-  -webkit-users-select: none;
-  user-select: none;
-}
