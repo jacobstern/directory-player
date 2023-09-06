@@ -9,6 +9,7 @@
 
 .seek-bar__progress {
   -webkit-appearance: none;
+  appearance: none;
   grid-row-start: seek-bar;
   grid-row-end: seek-bar;
   width: 100%;

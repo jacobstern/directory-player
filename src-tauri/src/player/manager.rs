@@ -1,12 +1,13 @@
 use std::{path::Path, sync::mpsc, thread, time::Duration};
 
-use log::{error, info};
+use log::{error, info, warn};
 use rtrb::RingBuffer;
 
 use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
 
 use super::{
-    errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlayerEvent, ProcessToGuiMsg,
+    errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlaybackState, PlayerEvent,
+    ProcessToGuiMsg, StartPlaybackMessage,
 };
 
 pub enum ManagerCommand {
@@ -89,6 +90,7 @@ pub struct PlaybackManager {
     event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
     current_playback: Option<CurrentPlayback>,
     next_playback_id: u64,
+    playback_state: PlaybackState,
 }
 
 fn poll_process_to_gui_message(
@@ -151,6 +153,7 @@ impl PlaybackManager {
             event_tx,
             current_playback: None,
             next_playback_id: 0,
+            playback_state: PlaybackState::Stopped,
         }
     }
 
@@ -163,18 +166,22 @@ impl PlaybackManager {
                         self.start_playback(queue.current().to_owned());
                     }
                 }
-                ManagerCommand::Pause => self
-                    .to_process_tx
-                    .push(GuiToProcessMsg::Pause)
-                    .unwrap_or_else(|_| {
-                        error!("Failed to send pause message to audio thread");
-                    }),
-                ManagerCommand::Resume => self
-                    .to_process_tx
-                    .push(GuiToProcessMsg::Resume)
-                    .unwrap_or_else(|_| {
-                        error!("Failed to send resume message to audio thread");
-                    }),
+                ManagerCommand::Pause => {
+                    self.to_process_tx
+                        .push(GuiToProcessMsg::Pause)
+                        .unwrap_or_else(|_| {
+                            error!("Failed to send pause message to audio thread");
+                        });
+                    self.update_playback_state(PlaybackState::Paused);
+                }
+                ManagerCommand::Resume => {
+                    self.to_process_tx
+                        .push(GuiToProcessMsg::Resume)
+                        .unwrap_or_else(|_| {
+                            error!("Failed to send resume message to audio thread");
+                        });
+                    self.update_playback_state(PlaybackState::Playing);
+                }
                 ManagerCommand::Progress(pos) => self
                     .event_tx
                     .blocking_send(PlayerEvent::Progress(pos))
@@ -200,33 +207,7 @@ impl PlaybackManager {
                         });
                 }
                 ManagerCommand::OpenFileStream(playback_id, path, file_stream) => {
-                    if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
-                        info!(
-                            "Ignoring stream for {:?} as it is no longer the current playback",
-                            path
-                        );
-                        continue;
-                    }
-
-                    let n_frames = file_stream.n_frames();
-
-                    self.stream_frame_count = n_frames;
-                    self.to_process_tx
-                        .push(GuiToProcessMsg::StartPlayback(file_stream))
-                        .unwrap_or_else(|_| {
-                            error!("Failed to send message to start playback to audio thread")
-                        });
-
-                    if let Some(n) = n_frames {
-                        self.event_tx
-                            .blocking_send(PlayerEvent::Track(TrackInfo {
-                                path,
-                                duration: n as usize,
-                            }))
-                            .unwrap_or_else(|e| {
-                                error!("Failed to send Track event with {e:?}");
-                            });
-                    }
+                    self.open_file_stream(playback_id, path, file_stream);
                 }
                 ManagerCommand::OpenFileStreamError(playback_id, path, e) => {
                     if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
@@ -246,6 +227,38 @@ impl PlaybackManager {
         }
     }
 
+    fn open_file_stream(&mut self, playback_id: u64, path: String, file_stream: FileStream) {
+        if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
+            info!(
+                "Ignoring stream for {:?} as it is no longer the current playback",
+                path
+            );
+            return;
+        }
+
+        let n_frames = file_stream.n_frames();
+
+        self.stream_frame_count = n_frames;
+        self.to_process_tx
+            .push(GuiToProcessMsg::StartPlayback(StartPlaybackMessage {
+                file_stream,
+                // In case the player was paused before the stream was opened
+                paused: self.playback_state == PlaybackState::Paused,
+            }))
+            .unwrap_or_else(|_| warn!("Failed to send message to start playback to audio thread"));
+
+        if let Some(n) = n_frames {
+            self.event_tx
+                .blocking_send(PlayerEvent::Track(TrackInfo {
+                    path,
+                    duration: n as usize,
+                }))
+                .unwrap_or_else(|e| {
+                    error!("Failed to send Track event with {e:?}");
+                });
+        }
+    }
+
     fn play_next(&mut self) {
         self.queue = self.queue.take().and_then(|queue| queue.go_next());
         if let Some(queue) = self.queue.as_ref() {
@@ -253,11 +266,13 @@ impl PlaybackManager {
         } else {
             self.current_playback = None;
             self.try_send_event(PlayerEvent::PlaybackFileChange(None));
+            self.update_playback_state(PlaybackState::Stopped);
         }
     }
 
     fn start_playback(&mut self, path: String) {
         info!("Starting stream for {:?}", path);
+        self.update_playback_state(PlaybackState::Playing);
 
         let playback_id = self.next_playback_id;
 
@@ -289,9 +304,17 @@ impl PlaybackManager {
         );
     }
 
+    fn update_playback_state(&mut self, playback_state: PlaybackState) {
+        if self.playback_state != playback_state {
+            self.playback_state = playback_state;
+            self.try_send_event(PlayerEvent::PlaybackStateChange(playback_state));
+        }
+    }
+
     fn try_send_event(&mut self, event: PlayerEvent) {
         if let Err(e) = self.event_tx.blocking_send(event.clone()) {
-            error!("Failed to send {event:?} from the manager with {e:?}");
+            // TODO: Decide on error log level policy
+            warn!("Failed to send {event:?} from the manager with {e:?}");
         }
     }
 }

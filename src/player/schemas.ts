@@ -6,3 +6,5 @@ export const PlaybackFileSchema = z.object({
 });
 
 export const PlaybackFileChangePayloadSchema = z.nullable(PlaybackFileSchema);
+
+export const PlaybackStateSchema = z.enum(["Playing", "Paused", "Stopped"]);

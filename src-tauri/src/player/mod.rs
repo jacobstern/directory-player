@@ -1,4 +1,4 @@
-use std::thread;
+use std::{fs::File, thread};
 
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,13 @@ mod manager;
 mod output;
 mod process;
 
+pub struct StartPlaybackMessage {
+    pub file_stream: FileStream,
+    pub paused: bool,
+}
+
 pub enum GuiToProcessMsg {
-    StartPlayback(FileStream),
+    StartPlayback(StartPlaybackMessage),
     Pause,
     Resume,
     SetGain(f32),
@@ -27,6 +32,13 @@ pub enum GuiToProcessMsg {
 pub enum ProcessToGuiMsg {
     PlaybackPos(usize),
     PlaybackEnded,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum PlaybackState {
+    Playing,
+    Paused,
+    Stopped,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -46,6 +58,7 @@ pub enum PlayerEvent {
     Progress(usize),
     Track(TrackInfo),
     PlaybackFileChange(Option<PlaybackFile>),
+    PlaybackStateChange(PlaybackState),
 }
 
 pub struct Player {

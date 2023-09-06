@@ -25,3 +25,7 @@
 .playback-button:hover {
   background-color: var(--hover-bg);
 }
+
+.playback-button:disabled {
+  opacity: 0.55;
+}

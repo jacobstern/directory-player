@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PlaybackFileSchema } from "./schemas";
+import { PlaybackFileSchema, PlaybackStateSchema } from "./schemas";
 
 export interface PlayerTrack {
   path: number;
@@ -9,3 +9,5 @@ export interface PlayerTrack {
 export type PlayerProgress = number;
 
 export type PlaybackFile = z.infer<typeof PlaybackFileSchema>;
+
+export type PlaybackState = z.infer<typeof PlaybackStateSchema>;

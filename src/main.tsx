@@ -12,7 +12,7 @@ import App from "./App";
 import { rootReducer } from "./rootReducer";
 import { treeviewInit } from "./treeview/actions";
 import { TreeviewView } from "./treeview/types";
-import { PlaybackFileProvider } from "./player";
+import { PlaybackFileProvider, PlaybackStateProvider } from "./player";
 
 async function main() {
   const treeviewView = await invoke<TreeviewView>("treeview_get_view");
@@ -23,9 +23,11 @@ async function main() {
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       <PlaybackFileProvider>
-        <Provider store={store}>
-          <App />
-        </Provider>
+        <PlaybackStateProvider>
+          <Provider store={store}>
+            <App />
+          </Provider>
+        </PlaybackStateProvider>
       </PlaybackFileProvider>
     </React.StrictMode>,
   );

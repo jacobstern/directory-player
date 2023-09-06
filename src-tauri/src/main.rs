@@ -211,6 +211,9 @@ fn main() {
                         PlayerEvent::PlaybackFileChange(file) => {
                             try_emit_all(&app_handle, "player:playbackFileChange", file);
                         }
+                        PlayerEvent::PlaybackStateChange(state) => {
+                            try_emit_all(&app_handle, "player:playbackStateChange", state);
+                        }
                     }
                 }
             });
