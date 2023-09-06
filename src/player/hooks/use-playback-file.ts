@@ -1,11 +1,8 @@
-import { PlaybackFileChangePayloadSchema } from "../schemas";
+import { useContext } from "react";
+
+import { PlaybackFileContext } from "../context/playback-file-context";
 import { PlaybackFile } from "../types";
-import { useLatestEventPayload } from "../../tauri";
 
 export default function usePlaybackFile(): PlaybackFile | null {
-  return useLatestEventPayload(
-    "player:playbackFileChange",
-    PlaybackFileChangePayloadSchema,
-    null,
-  );
+  return useContext(PlaybackFileContext);
 }

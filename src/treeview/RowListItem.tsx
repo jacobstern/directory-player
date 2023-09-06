@@ -3,7 +3,7 @@ import "./RowListItem.css";
 import ExpandButton from "./ExpandButton";
 import classNames from "classnames";
 import FileIcon from "./FileIcon";
-import usePlaybackFile from "../player/hooks/use-playback-file";
+import { usePlaybackFile } from "../player";
 
 export interface RowListItemProps {
   path: string;
