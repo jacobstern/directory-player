@@ -5,10 +5,10 @@ use rtrb::{Consumer, Producer};
 
 use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
 
-use super::{file_stream::FileStream, StartPlaybackMessage};
+use super::file_stream::FileStream;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PlaybackState {
+pub enum ProcessPlaybackState {
     Paused,
     Playing,
 }
@@ -17,7 +17,7 @@ pub struct Process {
     file_stream: Option<FileStream>,
     to_gui_tx: Producer<ProcessToGuiMsg>,
     from_gui_rx: Consumer<GuiToProcessMsg>,
-    playback_state: PlaybackState,
+    playback_state: ProcessPlaybackState,
     gain: f32,
     fatal_error: bool,
 }
@@ -31,7 +31,7 @@ impl Process {
             file_stream: None,
             to_gui_tx,
             from_gui_rx,
-            playback_state: PlaybackState::Paused,
+            playback_state: ProcessPlaybackState::Paused,
             gain: 0.0,
             fatal_error: false,
         }
@@ -52,22 +52,19 @@ impl Process {
     fn try_process(&mut self, mut data: &mut [f32]) -> symphonia::core::errors::Result<()> {
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
-                GuiToProcessMsg::StartPlayback(StartPlaybackMessage {
-                    file_stream,
-                    paused,
-                }) => {
+                GuiToProcessMsg::StartPlayback(file_stream) => {
                     self.file_stream = Some(file_stream);
-                    if paused {
-                        self.playback_state = PlaybackState::Paused;
-                    } else {
-                        self.playback_state = PlaybackState::Playing;
-                    }
+                    self.playback_state = ProcessPlaybackState::Playing;
+                }
+                GuiToProcessMsg::Stop => {
+                    self.file_stream = None;
+                    self.playback_state = ProcessPlaybackState::Paused;
                 }
                 GuiToProcessMsg::Pause => {
-                    self.playback_state = PlaybackState::Paused;
+                    self.playback_state = ProcessPlaybackState::Paused;
                 }
                 GuiToProcessMsg::Resume => {
-                    self.playback_state = PlaybackState::Playing;
+                    self.playback_state = ProcessPlaybackState::Playing;
                 }
                 GuiToProcessMsg::SeekTo(pos) => {
                     if let Some(file_stream) = &mut self.file_stream {
@@ -85,7 +82,7 @@ impl Process {
 
         let mut reached_end_of_file = false;
 
-        if self.playback_state == PlaybackState::Paused {
+        if self.playback_state == ProcessPlaybackState::Paused {
             silence(data);
         } else if let Some(file_stream) = &mut self.file_stream {
             while !data.is_empty() {
@@ -144,7 +141,7 @@ impl Process {
 
         if reached_end_of_file {
             self.file_stream = None;
-            self.playback_state = PlaybackState::Paused;
+            self.playback_state = ProcessPlaybackState::Paused;
         }
 
         // TODO: Fade in/out audio when buffering?

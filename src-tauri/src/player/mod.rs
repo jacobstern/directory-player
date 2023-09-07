@@ -15,15 +15,11 @@ mod manager;
 mod output;
 mod process;
 
-pub struct StartPlaybackMessage {
-    pub file_stream: FileStream,
-    pub paused: bool,
-}
-
 pub enum GuiToProcessMsg {
-    StartPlayback(StartPlaybackMessage),
+    StartPlayback(FileStream),
     Pause,
     Resume,
+    Stop,
     SetGain(f32),
     SeekTo(usize),
 }
@@ -104,6 +100,12 @@ impl Player {
     pub fn seek(&mut self, offset: usize) {
         self.command_tx
             .send(ManagerCommand::SeekTo(offset))
-            .unwrap_or_else(|_| error!("Failed to send seek command to the manager"));
+            .unwrap_or_else(|_| warn!("Failed to send seek command to the manager"));
+    }
+
+    pub fn skip_forward(&mut self) {
+        self.command_tx
+            .send(ManagerCommand::SkipForward)
+            .unwrap_or_else(|_| warn!("Failed to send skip forward command to the manager"));
     }
 }

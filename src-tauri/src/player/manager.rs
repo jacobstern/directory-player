@@ -7,7 +7,7 @@ use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
 
 use super::{
     errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlaybackState, PlayerEvent,
-    ProcessToGuiMsg, StartPlaybackMessage,
+    ProcessToGuiMsg,
 };
 
 pub enum ManagerCommand {
@@ -20,6 +20,7 @@ pub enum ManagerCommand {
     SeekTo(usize),
     OpenFileStreamError(u64, String, FileStreamOpenError),
     OpenFileStream(u64, String, FileStream),
+    SkipForward,
 }
 
 #[derive(Clone)]
@@ -223,6 +224,9 @@ impl PlaybackManager {
 
                     self.play_next();
                 }
+                ManagerCommand::SkipForward => {
+                    self.skip_forward();
+                }
             }
         }
     }
@@ -239,12 +243,9 @@ impl PlaybackManager {
         let n_frames = file_stream.n_frames();
 
         self.stream_frame_count = n_frames;
+        self.update_playback_state(PlaybackState::Playing);
         self.to_process_tx
-            .push(GuiToProcessMsg::StartPlayback(StartPlaybackMessage {
-                file_stream,
-                // In case the player was paused before the stream was opened
-                paused: self.playback_state == PlaybackState::Paused,
-            }))
+            .push(GuiToProcessMsg::StartPlayback(file_stream))
             .unwrap_or_else(|_| warn!("Failed to send message to start playback to audio thread"));
 
         if let Some(n) = n_frames {
@@ -259,12 +260,21 @@ impl PlaybackManager {
         }
     }
 
+    fn skip_forward(&mut self) {
+        self.play_next();
+    }
+
     fn play_next(&mut self) {
         self.queue = self.queue.take().and_then(|queue| queue.go_next());
         if let Some(queue) = self.queue.as_ref() {
             self.start_playback(queue.current().to_owned());
         } else {
             self.current_playback = None;
+            self.to_process_tx
+                .push(GuiToProcessMsg::Stop)
+                .unwrap_or_else(|_| {
+                    warn!("Failed to send stop message to audio thread");
+                });
             self.try_send_event(PlayerEvent::PlaybackFileChange(None));
             self.update_playback_state(PlaybackState::Stopped);
         }
