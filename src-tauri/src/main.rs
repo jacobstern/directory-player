@@ -166,6 +166,11 @@ fn player_skip_forward(player_state: tauri::State<PlayerState>) {
 }
 
 #[tauri::command]
+fn player_skip_back(player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().skip_back();
+}
+
+#[tauri::command]
 async fn show_main_window(window: tauri::Window) {
     window.get_window("main").unwrap().show().unwrap();
 }
@@ -193,6 +198,7 @@ fn main() {
             player_set_volume,
             player_seek,
             player_skip_forward,
+            player_skip_back,
             show_main_window
         ])
         .setup(|app| {

@@ -108,4 +108,10 @@ impl Player {
             .send(ManagerCommand::SkipForward)
             .unwrap_or_else(|_| warn!("Failed to send skip forward command to the manager"));
     }
+
+    pub fn skip_back(&mut self) {
+        self.command_tx
+            .send(ManagerCommand::SkipBack)
+            .unwrap_or_else(|_| warn!("Failed to send skip back command to the manager"));
+    }
 }

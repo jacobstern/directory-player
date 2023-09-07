@@ -2,6 +2,7 @@ use std::{path::Path, sync::mpsc, thread, time::Duration};
 
 use log::{error, info, warn};
 use rtrb::RingBuffer;
+use symphonia::core::units::{Time, TimeBase};
 
 use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
 
@@ -9,6 +10,8 @@ use super::{
     errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlaybackState, PlayerEvent,
     ProcessToGuiMsg,
 };
+
+const STREAM_SEEK_BACK_THRESHOLD_SECONDS: u8 = 3;
 
 pub enum ManagerCommand {
     StartPlayback(Vec<String>),
@@ -21,6 +24,7 @@ pub enum ManagerCommand {
     OpenFileStreamError(u64, String, FileStreamOpenError),
     OpenFileStream(u64, String, FileStream),
     SkipForward,
+    SkipBack,
 }
 
 #[derive(Clone)]
@@ -57,16 +61,22 @@ impl<T> Queue<T> {
         }
     }
 
-    pub fn go_previous(self) -> Option<Queue<T>> {
+    pub fn go_previous_clamped(self) -> Queue<T> {
         if self.has_previous() {
-            Some(Queue {
+            Queue {
                 index: self.index - 1,
                 elements: self.elements,
-            })
+            }
         } else {
-            None
+            self
         }
     }
+}
+
+struct StreamTimingInternal {
+    time_base: TimeBase,
+    n_frames: u64,
+    pos: usize,
 }
 
 fn gain_for_volume(volume: f64) -> f32 {
@@ -76,22 +86,17 @@ fn gain_for_volume(volume: f64) -> f32 {
     (amp as f32).min(1.0)
 }
 
-struct CurrentPlayback {
-    playback_id: u64,
-    file_path: String,
-}
-
 pub struct PlaybackManager {
     output: Output,
     to_process_tx: rtrb::Producer<GuiToProcessMsg>,
     command_rx: mpsc::Receiver<ManagerCommand>,
     command_tx: mpsc::Sender<ManagerCommand>,
-    stream_frame_count: Option<u64>,
     queue: Option<Queue<String>>,
     event_tx: tokio::sync::mpsc::Sender<PlayerEvent>,
-    current_playback: Option<CurrentPlayback>,
+    current_playback_id: Option<u64>,
     next_playback_id: u64,
     playback_state: PlaybackState,
+    stream_timing: Option<StreamTimingInternal>,
 }
 
 fn poll_process_to_gui_message(
@@ -149,12 +154,12 @@ impl PlaybackManager {
             to_process_tx,
             command_rx,
             command_tx,
-            stream_frame_count: None,
             queue: None,
             event_tx,
-            current_playback: None,
+            current_playback_id: None,
             next_playback_id: 0,
             playback_state: PlaybackState::Stopped,
+            stream_timing: None,
         }
     }
 
@@ -183,13 +188,11 @@ impl PlaybackManager {
                         });
                     self.update_playback_state(PlaybackState::Playing);
                 }
-                ManagerCommand::Progress(pos) => self
-                    .event_tx
-                    .blocking_send(PlayerEvent::Progress(pos))
-                    .unwrap_or_else(|e| {
-                        error!("Failed to send Progress event with {e:?}");
-                    }),
+                ManagerCommand::Progress(pos) => {
+                    self.progress(pos);
+                }
                 ManagerCommand::PlaybackEnded => {
+                    // TODO: Check for current_playback_id
                     self.play_next();
                 }
                 ManagerCommand::SetVolume(volume) => {
@@ -211,7 +214,7 @@ impl PlaybackManager {
                     self.open_file_stream(playback_id, path, file_stream);
                 }
                 ManagerCommand::OpenFileStreamError(playback_id, path, e) => {
-                    if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
+                    if Some(playback_id) != self.current_playback_id {
                         info!(
                             "Ignoring open stream error for {:?} as it is no longer the current playback",
                             path
@@ -227,12 +230,15 @@ impl PlaybackManager {
                 ManagerCommand::SkipForward => {
                     self.skip_forward();
                 }
+                ManagerCommand::SkipBack => {
+                    self.skip_back();
+                }
             }
         }
     }
 
     fn open_file_stream(&mut self, playback_id: u64, path: String, file_stream: FileStream) {
-        if Some(playback_id) != self.current_playback.as_ref().map(|p| p.playback_id) {
+        if Some(playback_id) != self.current_playback_id {
             info!(
                 "Ignoring stream for {:?} as it is no longer the current playback",
                 path
@@ -241,27 +247,72 @@ impl PlaybackManager {
         }
 
         let n_frames = file_stream.n_frames();
+        let time_base = file_stream.time_base();
 
-        self.stream_frame_count = n_frames;
-        self.update_playback_state(PlaybackState::Playing);
-        self.to_process_tx
-            .push(GuiToProcessMsg::StartPlayback(file_stream))
-            .unwrap_or_else(|_| warn!("Failed to send message to start playback to audio thread"));
-
-        if let Some(n) = n_frames {
+        if let Some(n_frames) = n_frames {
             self.event_tx
                 .blocking_send(PlayerEvent::Track(TrackInfo {
                     path,
-                    duration: n as usize,
+                    duration: n_frames as usize,
                 }))
                 .unwrap_or_else(|e| {
                     error!("Failed to send Track event with {e:?}");
                 });
+
+            if let Some(time_base) = time_base {
+                self.stream_timing = Some(StreamTimingInternal {
+                    time_base: *time_base,
+                    n_frames,
+                    pos: 0,
+                });
+            }
         }
+
+        self.update_playback_state(PlaybackState::Playing);
+        self.to_process_tx
+            .push(GuiToProcessMsg::StartPlayback(file_stream))
+            .unwrap_or_else(|_| warn!("Failed to send message to start playback to audio thread"));
     }
 
     fn skip_forward(&mut self) {
         self.play_next();
+    }
+
+    fn skip_back(&mut self) {
+        let has_previous = self
+            .queue
+            .as_ref()
+            .map_or(false, |queue| queue.has_previous());
+        let is_early_in_stream = self.stream_timing.as_ref().map_or(false, |timing| {
+            timing.time_base.calc_time(timing.pos as u64)
+                < Time::from_ss(STREAM_SEEK_BACK_THRESHOLD_SECONDS, 0).unwrap()
+        });
+
+        if is_early_in_stream && has_previous {
+            self.queue = self.queue.take().map(|queue| {
+                let previous = queue.go_previous_clamped();
+                self.start_playback(previous.current().to_owned());
+                previous
+            });
+        } else {
+            self.to_process_tx
+                .push(GuiToProcessMsg::SeekTo(0))
+                .unwrap_or_else(|_| {
+                    error!("Failed to send seek message to audio thread for skip back");
+                });
+        }
+    }
+
+    fn progress(&mut self, pos: usize) {
+        if let Some(timing) = self.stream_timing.as_mut() {
+            // TODO: New event type
+            timing.pos = pos;
+        }
+        self.event_tx
+            .blocking_send(PlayerEvent::Progress(pos))
+            .unwrap_or_else(|e| {
+                error!("Failed to send Progress event with {e:?}");
+            });
     }
 
     fn play_next(&mut self) {
@@ -269,7 +320,8 @@ impl PlaybackManager {
         if let Some(queue) = self.queue.as_ref() {
             self.start_playback(queue.current().to_owned());
         } else {
-            self.current_playback = None;
+            self.current_playback_id = None;
+            self.stream_timing = None;
             self.to_process_tx
                 .push(GuiToProcessMsg::Stop)
                 .unwrap_or_else(|_| {
@@ -287,10 +339,7 @@ impl PlaybackManager {
         let playback_id = self.next_playback_id;
 
         self.next_playback_id += 1;
-        self.current_playback = Some(CurrentPlayback {
-            playback_id,
-            file_path: path.clone(),
-        });
+        self.current_playback_id = Some(playback_id);
 
         let os_path = Path::new(&path);
         let file_name = os_path.file_name().unwrap().to_str().unwrap().to_owned();
