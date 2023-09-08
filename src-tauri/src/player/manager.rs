@@ -279,6 +279,8 @@ impl PlaybackManager {
     }
 
     fn skip_back(&mut self) {
+        // TODO: Should be able to skip back to a previous track in the directory even if we
+        // started playback in the middle
         let has_previous = self
             .queue
             .as_ref()
@@ -300,6 +302,16 @@ impl PlaybackManager {
                 .unwrap_or_else(|_| {
                     error!("Failed to send seek message to audio thread for skip back");
                 });
+            // TODO: Decide whether this behavior is desirable. Currently disabled for simplicity.
+            // if self.playback_state == PlaybackState::Paused {
+            //     // Restart playback for consistency
+            //     self.to_process_tx
+            //         .push(GuiToProcessMsg::Resume)
+            //         .unwrap_or_else(|_| {
+            //             error!("Failed to send resume message to audio thread for skip back");
+            //         });
+            //     self.update_playback_state(PlaybackState::Playing);
+            // }
         }
     }
 

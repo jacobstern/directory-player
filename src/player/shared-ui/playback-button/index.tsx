@@ -2,15 +2,15 @@ import React from "react";
 
 import "./playback-button.styles.css";
 
-export type ControlsButtonIcon =
+export type PlaybackButtonIcon =
   | "Play"
   | "Pause"
   | "SkipBack"
   | "SkipForward"
   | "Stop";
 
-export interface ControlsButtonProps {
-  icon: ControlsButtonIcon;
+export interface PlaybackButtonProps {
+  icon: PlaybackButtonIcon;
   disabled?: boolean;
   title: string;
   onClick?: VoidFunction;
@@ -20,16 +20,16 @@ export default function PlaybackButton({
   onClick,
   title,
   disabled,
-  icon: namedIcon,
-}: ControlsButtonProps) {
+  icon,
+}: PlaybackButtonProps) {
   const handleClick: React.MouseEventHandler = (e) => {
     e.preventDefault();
     onClick?.();
   };
-  let icon: React.ReactNode;
-  switch (namedIcon) {
+  let iconNode: React.ReactNode;
+  switch (icon) {
     case "Play":
-      icon = (
+      iconNode = (
         <svg
           xmlns="http://www.w3.org/2000/svg"
           height="1em"
@@ -42,7 +42,7 @@ export default function PlaybackButton({
       );
       break;
     case "SkipForward":
-      icon = (
+      iconNode = (
         <svg
           xmlns="http://www.w3.org/2000/svg"
           height="1em"
@@ -55,7 +55,7 @@ export default function PlaybackButton({
       );
       break;
     case "SkipBack":
-      icon = (
+      iconNode = (
         <svg
           xmlns="http://www.w3.org/2000/svg"
           height="1em"
@@ -69,7 +69,7 @@ export default function PlaybackButton({
       break;
     case "Pause":
     default:
-      icon = (
+      iconNode = (
         <svg
           xmlns="http://www.w3.org/2000/svg"
           height="1em"
@@ -89,7 +89,7 @@ export default function PlaybackButton({
       onClick={handleClick}
       className="playback-button"
     >
-      {icon}
+      {iconNode}
     </button>
   );
 }

@@ -9,6 +9,7 @@ use self::{
     manager::{ManagerCommand, PlaybackManager},
 };
 
+mod decode_worker;
 mod errors;
 mod file_stream;
 mod manager;

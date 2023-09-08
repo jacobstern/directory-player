@@ -33,6 +33,7 @@ export default function VolumeSlider() {
       type="range"
       value={volume}
       onChange={handleChange}
+      title="Volume"
     />
   );
 }

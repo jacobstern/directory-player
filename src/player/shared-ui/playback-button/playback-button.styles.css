@@ -9,7 +9,6 @@
 
   width: 32px;
   height: 28px;
-  cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -22,7 +21,11 @@
   margin-left: 4px;
 }
 
-.playback-button:hover {
+.playback-button:not(:disabled) {
+  cursor: pointer;
+}
+
+.playback-button:hover:not(:disabled) {
   background-color: var(--hover-bg);
 }
 
