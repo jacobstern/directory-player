@@ -1,6 +1,6 @@
-use std::{fs::File, thread};
+use std::thread;
 
-use log::{error, warn};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 
@@ -72,9 +72,12 @@ impl Player {
         Player { command_tx }
     }
 
-    pub fn start_playback(&mut self, file_paths: &[String]) {
+    pub fn start_playback(&mut self, file_paths: &[String], start_index: usize) {
         self.command_tx
-            .send(ManagerCommand::StartPlayback(Vec::from(file_paths)))
+            .send(ManagerCommand::StartPlayback(
+                Vec::from(file_paths),
+                start_index,
+            ))
             .unwrap_or_else(|_| {
                 warn!("Failed to send start playback command to the manager");
             });

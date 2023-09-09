@@ -11,10 +11,10 @@ use super::{
     ProcessToGuiMsg,
 };
 
-const STREAM_SEEK_BACK_THRESHOLD_SECONDS: u8 = 3;
+const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
 
 pub enum ManagerCommand {
-    StartPlayback(Vec<String>),
+    StartPlayback(Vec<String>, usize),
     Pause,
     Progress(usize),
     PlaybackEnded,
@@ -27,6 +27,7 @@ pub enum ManagerCommand {
     SkipBack,
 }
 
+// TODO: Move this to a separate module
 #[derive(Clone)]
 struct Queue<T> {
     elements: Vec<T>,
@@ -34,11 +35,15 @@ struct Queue<T> {
 }
 
 impl<T> Queue<T> {
-    pub fn from_vec(elements: Vec<T>) -> Option<Queue<T>> {
-        if elements.is_empty() {
+    pub fn from_iter<I: IntoIterator<Item = T>>(elements: I, start_index: usize) -> Option<Self> {
+        let elements = Vec::from_iter(elements.into_iter());
+        if elements.len() <= start_index {
             None
         } else {
-            Some(Queue { elements, index: 0 })
+            Some(Queue {
+                elements,
+                index: start_index,
+            })
         }
     }
 
@@ -50,6 +55,7 @@ impl<T> Queue<T> {
         &self.elements[self.index]
     }
 
+    // TODO: These should probably just return a Result instead
     pub fn go_next(self) -> Option<Queue<T>> {
         if self.index + 1 < self.elements.len() {
             Some(Queue {
@@ -166,11 +172,8 @@ impl PlaybackManager {
     pub fn run(mut self) {
         while let Ok(msg) = self.command_rx.recv() {
             match msg {
-                ManagerCommand::StartPlayback(file_paths) => {
-                    self.queue = Queue::from_vec(file_paths);
-                    if let Some(queue) = self.queue.as_ref() {
-                        self.start_playback(queue.current().to_owned());
-                    }
+                ManagerCommand::StartPlayback(file_paths, start_index) => {
+                    self.start_playback_impl(file_paths, start_index);
                 }
                 ManagerCommand::Pause => {
                     self.to_process_tx
@@ -189,7 +192,7 @@ impl PlaybackManager {
                     self.update_playback_state(PlaybackState::Playing);
                 }
                 ManagerCommand::Progress(pos) => {
-                    self.progress(pos);
+                    self.progress_impl(pos);
                 }
                 ManagerCommand::PlaybackEnded => {
                     // TODO: Check for current_playback_id
@@ -211,7 +214,7 @@ impl PlaybackManager {
                         });
                 }
                 ManagerCommand::OpenFileStream(playback_id, path, file_stream) => {
-                    self.open_file_stream(playback_id, path, file_stream);
+                    self.open_file_stream_impl(playback_id, path, file_stream);
                 }
                 ManagerCommand::OpenFileStreamError(playback_id, path, e) => {
                     if Some(playback_id) != self.current_playback_id {
@@ -228,16 +231,23 @@ impl PlaybackManager {
                     self.play_next();
                 }
                 ManagerCommand::SkipForward => {
-                    self.skip_forward();
+                    self.skip_forward_impl();
                 }
                 ManagerCommand::SkipBack => {
-                    self.skip_back();
+                    self.skip_back_impl();
                 }
             }
         }
     }
 
-    fn open_file_stream(&mut self, playback_id: u64, path: String, file_stream: FileStream) {
+    fn start_playback_impl(&mut self, file_paths: Vec<String>, start_index: usize) {
+        self.queue = Queue::from_iter(file_paths, start_index);
+        if let Some(queue) = self.queue.as_ref() {
+            self.start_playback(queue.current().to_owned());
+        }
+    }
+
+    fn open_file_stream_impl(&mut self, playback_id: u64, path: String, file_stream: FileStream) {
         if Some(playback_id) != self.current_playback_id {
             info!(
                 "Ignoring stream for {:?} as it is no longer the current playback",
@@ -274,11 +284,11 @@ impl PlaybackManager {
             .unwrap_or_else(|_| warn!("Failed to send message to start playback to audio thread"));
     }
 
-    fn skip_forward(&mut self) {
+    fn skip_forward_impl(&mut self) {
         self.play_next();
     }
 
-    fn skip_back(&mut self) {
+    fn skip_back_impl(&mut self) {
         // TODO: Should be able to skip back to a previous track in the directory even if we
         // started playback in the middle
         let has_previous = self
@@ -287,7 +297,7 @@ impl PlaybackManager {
             .map_or(false, |queue| queue.has_previous());
         let is_early_in_stream = self.stream_timing.as_ref().map_or(false, |timing| {
             timing.time_base.calc_time(timing.pos as u64)
-                < Time::from_ss(STREAM_SEEK_BACK_THRESHOLD_SECONDS, 0).unwrap()
+                < Time::from_ss(STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART, 0).unwrap()
         });
 
         if is_early_in_stream && has_previous {
@@ -296,26 +306,19 @@ impl PlaybackManager {
                 self.start_playback(previous.current().to_owned());
                 previous
             });
-        } else {
+        } else if self.stream_timing.as_ref().map_or(0, |timing| timing.pos) > 0 {
+            // TODO: Technically, we can have a stream position without the timing data structure
+            // but this is not currently done since the UI won't make use of it. Is it worth
+            // splitting out the pos field?
             self.to_process_tx
                 .push(GuiToProcessMsg::SeekTo(0))
                 .unwrap_or_else(|_| {
                     error!("Failed to send seek message to audio thread for skip back");
                 });
-            // TODO: Decide whether this behavior is desirable. Currently disabled for simplicity.
-            // if self.playback_state == PlaybackState::Paused {
-            //     // Restart playback for consistency
-            //     self.to_process_tx
-            //         .push(GuiToProcessMsg::Resume)
-            //         .unwrap_or_else(|_| {
-            //             error!("Failed to send resume message to audio thread for skip back");
-            //         });
-            //     self.update_playback_state(PlaybackState::Playing);
-            // }
         }
     }
 
-    fn progress(&mut self, pos: usize) {
+    fn progress_impl(&mut self, pos: usize) {
         if let Some(timing) = self.stream_timing.as_mut() {
             // TODO: New event type
             timing.pos = pos;
@@ -337,7 +340,7 @@ impl PlaybackManager {
             self.to_process_tx
                 .push(GuiToProcessMsg::Stop)
                 .unwrap_or_else(|_| {
-                    warn!("Failed to send stop message to audio thread");
+                    warn!("Failed to send stop message to audio thread for end of queue");
                 });
             self.try_send_event(PlayerEvent::PlaybackFileChange(None));
             self.update_playback_state(PlaybackState::Stopped);
@@ -345,6 +348,15 @@ impl PlaybackManager {
     }
 
     fn start_playback(&mut self, path: String) {
+        // TODO: Consider revisiting this. To avoid significant complexity, we don't continue to
+        // play the current stream if we're starting a new one. This is a little confusing since we
+        // do some other things optimistically, like setting the playback state to Playing here.
+        self.to_process_tx
+            .push(GuiToProcessMsg::Stop)
+            .unwrap_or_else(|_| {
+                warn!("Failed to send stop message to audio thread when starting a new playback");
+            });
+
         info!("Starting stream for {:?}", path);
         self.update_playback_state(PlaybackState::Playing);
 

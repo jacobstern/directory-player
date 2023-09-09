@@ -146,8 +146,16 @@ fn player_pause(player_state: tauri::State<PlayerState>) {
 }
 
 #[tauri::command]
-fn player_start_playback(file_paths: Vec<String>, player_state: tauri::State<PlayerState>) {
-    player_state.0.lock().unwrap().start_playback(&file_paths);
+fn player_start_playback(
+    file_paths: Vec<String>,
+    start_index: usize,
+    player_state: tauri::State<PlayerState>,
+) {
+    player_state
+        .0
+        .lock()
+        .unwrap()
+        .start_playback(&file_paths, start_index);
 }
 
 #[tauri::command]

@@ -225,7 +225,6 @@ impl FileStream {
     pub fn seek(&mut self, seek_to: usize) {
         self.poll();
         self.stream_id += 1;
-        // TODO: Don't deallocate on audio thread
         if let Ok(()) = self
             .message_producer
             .push(FileStreamToDecodeWorkerMessage::Seek(

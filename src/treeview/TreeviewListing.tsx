@@ -15,7 +15,7 @@ import { treeviewItemUpdate } from "./actions";
 import { TreeviewItem } from "./types";
 import { invoke } from "@tauri-apps/api";
 import { throttle } from "../utils/throttle";
-import { getPlaybackItems } from "./helpers";
+import { getQueueAtCursor } from "./helpers";
 import { AppAction, AppState } from "../types";
 
 const LIST_ITEM_HEIGHT = 26;
@@ -53,13 +53,17 @@ export default function TreeviewListing() {
       const {
         treeview: { items: normalizedItems },
       } = state;
-      const paths = getPlaybackItems(
+      const queue = getQueueAtCursor(
         path,
         selectFlatListing(state),
         normalizedItems,
       );
-      if (paths.length > 0) {
-        await invoke("player_start_playback", { filePaths: paths });
+      if (queue !== null) {
+        const { filePaths: paths, startIndex } = queue;
+        await invoke("player_start_playback", {
+          filePaths: paths,
+          startIndex,
+        });
       }
     },
     [getState],
