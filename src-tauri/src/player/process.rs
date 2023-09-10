@@ -5,7 +5,7 @@ use rtrb::{Consumer, Producer};
 
 use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
 
-use super::file_stream::FileStream;
+use super::{file_stream::FileStream, StartPlaybackState};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProcessPlaybackState {
@@ -52,9 +52,12 @@ impl Process {
     fn try_process(&mut self, mut data: &mut [f32]) -> symphonia::core::errors::Result<()> {
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
-                GuiToProcessMsg::StartPlayback(file_stream) => {
+                GuiToProcessMsg::StartPlayback(file_stream, start_playback_state) => {
                     self.file_stream = Some(file_stream);
-                    self.playback_state = ProcessPlaybackState::Playing;
+                    self.playback_state = match start_playback_state {
+                        StartPlaybackState::Playing => ProcessPlaybackState::Playing,
+                        StartPlaybackState::Paused => ProcessPlaybackState::Paused,
+                    };
                 }
                 GuiToProcessMsg::Stop => {
                     self.file_stream = None;

@@ -8,7 +8,7 @@ use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
 
 use super::{
     errors::FileStreamOpenError, output::Output, GuiToProcessMsg, PlaybackState, PlayerEvent,
-    ProcessToGuiMsg,
+    ProcessToGuiMsg, StartPlaybackState,
 };
 
 const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
@@ -278,9 +278,19 @@ impl PlaybackManager {
             }
         }
 
-        self.update_playback_state(PlaybackState::Playing);
+        assert_ne!(self.playback_state, PlaybackState::Stopped);
+
+        let start_playback_state = if self.playback_state == PlaybackState::Paused {
+            StartPlaybackState::Paused
+        } else {
+            StartPlaybackState::Playing
+        };
+
         self.to_process_tx
-            .push(GuiToProcessMsg::StartPlayback(file_stream))
+            .push(GuiToProcessMsg::StartPlayback(
+                file_stream,
+                start_playback_state,
+            ))
             .unwrap_or_else(|_| warn!("Failed to send message to start playback to audio thread"));
     }
 

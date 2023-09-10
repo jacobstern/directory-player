@@ -16,8 +16,13 @@ mod manager;
 mod output;
 mod process;
 
+pub enum StartPlaybackState {
+    Playing,
+    Paused,
+}
+
 pub enum GuiToProcessMsg {
-    StartPlayback(FileStream),
+    StartPlayback(FileStream, StartPlaybackState),
     Pause,
     Resume,
     Stop,
