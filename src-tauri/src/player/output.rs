@@ -2,7 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rtrb::{Consumer, Producer};
 
 use crate::player::process::Process;
-use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
+use crate::player::{ManagerToProcessMsg, ProcessToManagerMsg};
 
 pub struct Output {
     _stream: cpal::Stream,
@@ -14,8 +14,8 @@ const PREFERRED_BUFFER_SIZE: u32 = 1024;
 
 impl Output {
     pub fn new(
-        to_gui_tx: Producer<ProcessToGuiMsg>,
-        from_gui_rx: Consumer<GuiToProcessMsg>,
+        to_manager_tx: Producer<ProcessToManagerMsg>,
+        from_manager_rx: Consumer<ManagerToProcessMsg>,
     ) -> Output {
         // Setup cpal audio output
 
@@ -39,7 +39,7 @@ impl Output {
             buffer_size: cpal::BufferSize::Fixed(buffer_size),
         };
 
-        let mut process = Process::new(to_gui_tx, from_gui_rx);
+        let mut process = Process::new(to_manager_tx, from_manager_rx);
 
         let stream = device
             .build_output_stream(

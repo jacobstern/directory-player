@@ -3,7 +3,7 @@
 use log::error;
 use rtrb::{Consumer, Producer};
 
-use crate::player::{GuiToProcessMsg, ProcessToGuiMsg};
+use crate::player::{ManagerToProcessMsg, ProcessToManagerMsg};
 
 use super::{file_stream::FileStream, StartPlaybackState};
 
@@ -15,8 +15,8 @@ pub enum ProcessPlaybackState {
 
 pub struct Process {
     file_stream: Option<FileStream>,
-    to_gui_tx: Producer<ProcessToGuiMsg>,
-    from_gui_rx: Consumer<GuiToProcessMsg>,
+    to_gui_tx: Producer<ProcessToManagerMsg>,
+    from_gui_rx: Consumer<ManagerToProcessMsg>,
     playback_state: ProcessPlaybackState,
     gain: f32,
     fatal_error: bool,
@@ -24,8 +24,8 @@ pub struct Process {
 
 impl Process {
     pub fn new(
-        to_gui_tx: Producer<ProcessToGuiMsg>,
-        from_gui_rx: Consumer<GuiToProcessMsg>,
+        to_gui_tx: Producer<ProcessToManagerMsg>,
+        from_gui_rx: Consumer<ManagerToProcessMsg>,
     ) -> Self {
         Self {
             file_stream: None,
@@ -52,32 +52,32 @@ impl Process {
     fn try_process(&mut self, mut data: &mut [f32]) -> symphonia::core::errors::Result<()> {
         while let Ok(msg) = self.from_gui_rx.pop() {
             match msg {
-                GuiToProcessMsg::StartPlayback(file_stream, start_playback_state) => {
+                ManagerToProcessMsg::StartPlayback(file_stream, start_playback_state) => {
                     self.file_stream = Some(file_stream);
                     self.playback_state = match start_playback_state {
                         StartPlaybackState::Playing => ProcessPlaybackState::Playing,
                         StartPlaybackState::Paused => ProcessPlaybackState::Paused,
                     };
                 }
-                GuiToProcessMsg::Stop => {
+                ManagerToProcessMsg::Stop => {
                     self.file_stream = None;
                     self.playback_state = ProcessPlaybackState::Paused;
                 }
-                GuiToProcessMsg::Pause => {
+                ManagerToProcessMsg::Pause => {
                     self.playback_state = ProcessPlaybackState::Paused;
                 }
-                GuiToProcessMsg::Resume => {
+                ManagerToProcessMsg::Resume => {
                     self.playback_state = ProcessPlaybackState::Playing;
                 }
-                GuiToProcessMsg::SeekTo(pos) => {
+                ManagerToProcessMsg::SeekTo(pos) => {
                     if let Some(file_stream) = &mut self.file_stream {
                         file_stream.seek(pos);
                         let _ = self
                             .to_gui_tx
-                            .push(ProcessToGuiMsg::PlaybackPos(file_stream.playhead()));
+                            .push(ProcessToManagerMsg::PlaybackPos(file_stream.playhead()));
                     }
                 }
-                GuiToProcessMsg::SetGain(gain) => {
+                ManagerToProcessMsg::SetGain(gain) => {
                     self.gain = gain;
                 }
             }
@@ -134,9 +134,9 @@ impl Process {
 
             let _ = self
                 .to_gui_tx
-                .push(ProcessToGuiMsg::PlaybackPos(file_stream.playhead()));
+                .push(ProcessToManagerMsg::PlaybackPos(file_stream.playhead()));
             if reached_end_of_file {
-                let _ = self.to_gui_tx.push(ProcessToGuiMsg::PlaybackEnded);
+                let _ = self.to_gui_tx.push(ProcessToManagerMsg::PlaybackEnded);
             }
         } else {
             silence(data);

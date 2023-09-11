@@ -21,7 +21,7 @@ pub enum StartPlaybackState {
     Paused,
 }
 
-pub enum GuiToProcessMsg {
+pub enum ManagerToProcessMsg {
     StartPlayback(FileStream, StartPlaybackState),
     Pause,
     Resume,
@@ -31,7 +31,7 @@ pub enum GuiToProcessMsg {
 }
 
 #[derive(Debug)]
-pub enum ProcessToGuiMsg {
+pub enum ProcessToManagerMsg {
     PlaybackPos(usize),
     PlaybackEnded,
 }
