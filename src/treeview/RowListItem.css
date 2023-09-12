@@ -20,6 +20,10 @@
   }
 }
 
+.row-list-item__playing-indicator--paused {
+  animation-play-state: paused;
+}
+
 @keyframes playing-indicator {
   0% {
     opacity: 0.65;

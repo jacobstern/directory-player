@@ -1,10 +1,11 @@
 import { CSSProperties, MouseEventHandler, useEffect, useState } from "react";
 
-import "./seek-bar.styles.css";
 import { listen } from "@tauri-apps/api/event";
 import { PlayerProgress, PlayerTrack } from "../../../types";
 import classNames from "classnames";
 import { invoke } from "@tauri-apps/api";
+
+import "./seek-bar.styles.css";
 
 export default function SeekBar() {
   const [trackDuration, setTrackDuration] = useState<number | undefined>();

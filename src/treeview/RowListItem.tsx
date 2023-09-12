@@ -4,6 +4,7 @@ import ExpandButton from "./ExpandButton";
 import classNames from "classnames";
 import FileIcon from "./FileIcon";
 import { usePlaybackFile } from "../player";
+import usePlaybackState from "../player/hooks/use-playback-state";
 
 export interface RowListItemProps {
   path: string;
@@ -43,6 +44,7 @@ function RowListItem({
     }
   };
   const playbackFile = usePlaybackFile();
+  const playbackState = usePlaybackState();
   const isPlaying = playbackFile?.path === path;
 
   const nameClasses = classNames("row-list-item__name", {
@@ -60,7 +62,10 @@ function RowListItem({
           height="1em"
           viewBox="0 0 384 512"
           fill="currentColor"
-          className="row-list-item__playing-indicator"
+          className={classNames("row-list-item__playing-indicator", {
+            "row-list-item__playing-indicator--paused":
+              playbackState === "Paused",
+          })}
         >
           <title>Now playing</title>
           {/*! Font Awesome Free 6.4.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2023 Fonticons, Inc.*/}

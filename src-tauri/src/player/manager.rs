@@ -144,9 +144,9 @@ impl PlaybackManager {
         command_tx: mpsc::Sender<ManagerCommand>,
         command_rx: mpsc::Receiver<ManagerCommand>,
     ) -> PlaybackManager {
-        let (to_gui_tx, from_process_rx) = RingBuffer::<ProcessToManagerMsg>::new(256);
-        let (to_process_tx, from_gui_rx) = RingBuffer::<ManagerToProcessMsg>::new(64);
-        let output = Output::new(to_gui_tx, from_gui_rx);
+        let (to_manager_tx, from_process_rx) = RingBuffer::<ProcessToManagerMsg>::new(256);
+        let (to_process_tx, from_manager_rx) = RingBuffer::<ManagerToProcessMsg>::new(64);
+        let output = Output::new(to_manager_tx, from_manager_rx);
 
         thread::spawn({
             let tx = command_tx.clone();
