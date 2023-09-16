@@ -1,7 +1,7 @@
-import { CSSProperties, PointerEventHandler, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { listen } from "@tauri-apps/api/event";
-import { PlayerProgress, PlayerTrack, StreamTiming } from "../../../types";
+import { StreamTiming } from "../../../types";
 import classNames from "classnames";
 import { invoke } from "@tauri-apps/api";
 
@@ -15,13 +15,9 @@ export default function SeekBar() {
   useEffect(() => {
     let unlistenProgress: VoidFunction | undefined;
     (async () => {
-      unlistenProgress = await listen<PlayerProgress>(
-        "player:streamTimingChange",
-        (event) => {
-          console.log(event.payload);
-          setStreamTiming(StreamTimingChangePayloadSchema.parse(event.payload));
-        },
-      );
+      unlistenProgress = await listen("player:streamTimingChange", (event) => {
+        setStreamTiming(StreamTimingChangePayloadSchema.parse(event.payload));
+      });
       return () => {
         unlistenProgress?.();
       };

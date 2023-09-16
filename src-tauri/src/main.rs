@@ -214,20 +214,6 @@ fn main() {
             async_runtime::spawn(async move {
                 while let Some(msg) = player_event_rx.recv().await {
                     match msg {
-                        PlayerEvent::Progress(progress) => {
-                            app_handle
-                                .emit_all("player:progress", progress)
-                                .unwrap_or_else(|e| {
-                                    error!("Failed to emit player:progress with {e:?}");
-                                });
-                        }
-                        PlayerEvent::Track(track) => {
-                            app_handle
-                                .emit_all("player:track", track)
-                                .unwrap_or_else(|e| {
-                                    error!("Failed to emit player:track with {e:?}");
-                                });
-                        }
                         PlayerEvent::PlaybackFileChange(file) => {
                             try_emit_all(&app_handle, "player:playbackFileChange", file);
                         }

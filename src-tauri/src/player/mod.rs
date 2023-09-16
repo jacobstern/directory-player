@@ -44,12 +44,6 @@ pub enum PlaybackState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct TrackInfo {
-    pub path: String,
-    pub duration: usize,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackFile {
     path: String,
     name: String,
@@ -64,8 +58,6 @@ pub struct StreamTiming {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PlayerEvent {
-    Progress(usize),
-    Track(TrackInfo),
     PlaybackFileChange(Option<PlaybackFile>),
     PlaybackStateChange(PlaybackState),
     StreamTimingChange(Option<StreamTiming>),

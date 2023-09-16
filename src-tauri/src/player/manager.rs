@@ -4,7 +4,7 @@ use log::{error, info, warn};
 use rtrb::RingBuffer;
 use symphonia::core::units::{Time, TimeBase};
 
-use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
+use crate::player::{file_stream::FileStream, PlaybackFile};
 
 use super::{
     errors::FileStreamOpenError, output::Output, ManagerToProcessMsg, PlaybackState, PlayerEvent,
@@ -273,15 +273,6 @@ impl PlaybackManager {
         let time_base = file_stream.time_base();
 
         if let Some(n_frames) = n_frames {
-            self.event_tx
-                .blocking_send(PlayerEvent::Track(TrackInfo {
-                    path,
-                    duration: n_frames as usize,
-                }))
-                .unwrap_or_else(|e| {
-                    error!("Failed to send Track event with {e:?}");
-                });
-
             if let Some(time_base) = time_base {
                 self.update_stream_timing(Some(StreamTimingInternal {
                     time_base: *time_base,
@@ -346,11 +337,6 @@ impl PlaybackManager {
             let updated = StreamTimingInternal { pos, ..*value };
             self.update_stream_timing(Some(updated));
         }
-        self.event_tx
-            .blocking_send(PlayerEvent::Progress(pos))
-            .unwrap_or_else(|e| {
-                error!("Failed to send Progress event with {e:?}");
-            });
     }
 
     fn play_next(&mut self) {
