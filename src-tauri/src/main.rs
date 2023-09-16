@@ -233,6 +233,9 @@ fn main() {
                         }
                         PlayerEvent::PlaybackStateChange(state) => {
                             try_emit_all(&app_handle, "player:playbackStateChange", state);
+                        },
+                        PlayerEvent::StreamTimingChange(timing) => {
+                            try_emit_all(&app_handle, "player:streamTimingChange", timing);
                         }
                     }
                 }

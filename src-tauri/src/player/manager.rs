@@ -8,7 +8,7 @@ use crate::player::{file_stream::FileStream, PlaybackFile, TrackInfo};
 
 use super::{
     errors::FileStreamOpenError, output::Output, ManagerToProcessMsg, PlaybackState, PlayerEvent,
-    ProcessToManagerMsg, StartPlaybackState,
+    ProcessToManagerMsg, StartPlaybackState, StreamTiming,
 };
 
 const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
@@ -79,15 +79,28 @@ impl<T> Queue<T> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct StreamTimingInternal {
     time_base: TimeBase,
     n_frames: u64,
     pos: usize,
 }
 
+impl StreamTimingInternal {
+    pub fn as_stream_timing(&self) -> StreamTiming {
+        let duration_time = self.time_base.calc_time(self.n_frames);
+        StreamTiming {
+            duration: self.n_frames,
+            pos: self.pos,
+            duration_seconds: duration_time.seconds,
+        }
+    }
+}
+
 fn gain_for_volume(volume: f64) -> f32 {
     let clamped = volume.max(0_f64).min(100_f64);
     let normalized = clamped / 100.0;
+    // let amp = normalized.powf(2.7);
     let amp = normalized.powf(2.7);
     (amp as f32).min(1.0)
 }
@@ -270,11 +283,11 @@ impl PlaybackManager {
                 });
 
             if let Some(time_base) = time_base {
-                self.stream_timing = Some(StreamTimingInternal {
+                self.update_stream_timing(Some(StreamTimingInternal {
                     time_base: *time_base,
                     n_frames,
                     pos: 0,
-                });
+                }));
             }
         }
 
@@ -329,9 +342,9 @@ impl PlaybackManager {
     }
 
     fn progress_impl(&mut self, pos: usize) {
-        if let Some(timing) = self.stream_timing.as_mut() {
-            // TODO: New event type
-            timing.pos = pos;
+        if let Some(value) = self.stream_timing.as_ref() {
+            let updated = StreamTimingInternal { pos, ..*value };
+            self.update_stream_timing(Some(updated));
         }
         self.event_tx
             .blocking_send(PlayerEvent::Progress(pos))
@@ -346,7 +359,7 @@ impl PlaybackManager {
             self.start_playback(queue.current().to_owned());
         } else {
             self.current_playback_id = None;
-            self.stream_timing = None;
+            self.update_stream_timing(None);
             self.to_process_tx
                 .push(ManagerToProcessMsg::Stop)
                 .unwrap_or_else(|_| {
@@ -401,6 +414,15 @@ impl PlaybackManager {
         if self.playback_state != playback_state {
             self.playback_state = playback_state;
             self.try_send_event(PlayerEvent::PlaybackStateChange(playback_state));
+        }
+    }
+
+    fn update_stream_timing(&mut self, stream_timing: Option<StreamTimingInternal>) {
+        if self.stream_timing != stream_timing {
+            let stream_timing_payload =
+                stream_timing.as_ref().map(|value| value.as_stream_timing());
+            self.stream_timing = stream_timing;
+            self.try_send_event(PlayerEvent::StreamTimingChange(stream_timing_payload));
         }
     }
 

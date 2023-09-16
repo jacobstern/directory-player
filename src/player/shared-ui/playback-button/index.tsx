@@ -1,4 +1,4 @@
-import React from "react";
+import React, { MouseEventHandler, ReactNode } from "react";
 
 import "./playback-button.styles.css";
 
@@ -22,11 +22,11 @@ export default function PlaybackButton({
   disabled,
   icon,
 }: PlaybackButtonProps) {
-  const handleClick: React.MouseEventHandler = (e) => {
+  const handleClick: MouseEventHandler = (e) => {
     e.preventDefault();
     onClick?.();
   };
-  let iconNode: React.ReactNode;
+  let iconNode: ReactNode;
   switch (icon) {
     case "Play":
       iconNode = (

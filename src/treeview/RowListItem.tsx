@@ -1,8 +1,8 @@
 import { memo } from "react";
 import "./RowListItem.css";
-import ExpandButton from "./ExpandButton";
+import ExpandButton from "./expand-button";
 import classNames from "classnames";
-import FileIcon from "./FileIcon";
+import FileIcon from "./file-icon";
 import { usePlaybackFile } from "../player";
 import usePlaybackState from "../player/hooks/use-playback-state";
 

@@ -56,11 +56,19 @@ pub struct PlaybackFile {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct StreamTiming {
+    pub duration: u64,
+    pub pos: usize,
+    pub duration_seconds: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PlayerEvent {
     Progress(usize),
     Track(TrackInfo),
     PlaybackFileChange(Option<PlaybackFile>),
     PlaybackStateChange(PlaybackState),
+    StreamTimingChange(Option<StreamTiming>),
 }
 
 pub struct Player {

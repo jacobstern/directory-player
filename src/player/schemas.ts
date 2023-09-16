@@ -8,3 +8,11 @@ export const PlaybackFileSchema = z.object({
 export const PlaybackFileChangePayloadSchema = z.nullable(PlaybackFileSchema);
 
 export const PlaybackStateSchema = z.enum(["Playing", "Paused", "Stopped"]);
+
+export const StreamTimingSchema = z.object({
+  duration: z.number(),
+  pos: z.number(),
+  duration_seconds: z.number(),
+});
+
+export const StreamTimingChangePayloadSchema = z.nullable(StreamTimingSchema);

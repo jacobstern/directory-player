@@ -1,4 +1,4 @@
-import "./FileIcon.css";
+import "./file-icon.styles.css";
 
 export type FileIconType = "Directory" | "MusicFile" | "File";
 

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import "./ExpandButton.css";
+import "./expand-button.styles.css";
 
 export interface ExpandButtonProps {
   isExpanded?: boolean;
