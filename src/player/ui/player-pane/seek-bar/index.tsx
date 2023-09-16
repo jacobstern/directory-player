@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { listen } from "@tauri-apps/api/event";
 import { StreamTiming } from "../../../types";
@@ -11,12 +11,17 @@ import { StreamTimingChangePayloadSchema } from "../../../schemas";
 export default function SeekBar() {
   const [streamTiming, setStreamTiming] = useState<StreamTiming | null>(null);
   const [thumbPosition, setThumbPosition] = useState<number | undefined>();
+  const [optimisticPos, setOptimisticPos] = useState<number | undefined>();
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     let unlistenProgress: VoidFunction | undefined;
     (async () => {
       unlistenProgress = await listen("player:streamTimingChange", (event) => {
         setStreamTiming(StreamTimingChangePayloadSchema.parse(event.payload));
+        if (!isDraggingRef.current) {
+          setOptimisticPos(undefined);
+        }
       });
       return () => {
         unlistenProgress?.();
@@ -31,21 +36,33 @@ export default function SeekBar() {
       })}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
+        isDraggingRef.current = true;
       }}
       onPointerMove={(e) => {
         const clientRect = e.currentTarget.getBoundingClientRect();
         const offsetX = e.clientX - clientRect.left;
-        const clampedOffset = Math.max(0, Math.min(offsetX));
+        const clampedOffset = Math.max(0, Math.min(offsetX, clientRect.width));
         setThumbPosition(clampedOffset);
+        if (
+          e.currentTarget.hasPointerCapture(e.pointerId) &&
+          streamTiming !== null
+        ) {
+          setOptimisticPos(
+            (clampedOffset * streamTiming.duration) / clientRect.width,
+          );
+        }
+      }}
+      onLostPointerCapture={() => {
+        isDraggingRef.current = false;
       }}
       onPointerUp={(e) => {
         e.currentTarget.releasePointerCapture(e.pointerId);
         if (streamTiming !== null) {
           const clientRect = e.currentTarget.getBoundingClientRect();
-          const left = e.clientX - clientRect.left;
+          const offsetX = e.clientX - clientRect.left;
           const normalizedPos = Math.max(
             0,
-            Math.min(1, left / clientRect.width),
+            Math.min(1, offsetX / clientRect.width),
           );
           const offset = Math.floor(normalizedPos * streamTiming.duration);
           invoke("player_seek", { offset });
@@ -56,7 +73,7 @@ export default function SeekBar() {
         className="seek-bar__progress"
         value={
           streamTiming !== null
-            ? streamTiming.pos / streamTiming.duration
+            ? (optimisticPos ?? streamTiming.pos) / streamTiming.duration
             : undefined
         }
       />
