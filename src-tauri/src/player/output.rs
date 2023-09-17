@@ -27,10 +27,15 @@ impl Output {
             .default_output_device()
             .expect("no output device available");
         let default_config = device.default_output_config().unwrap();
-        let preferred_config = device
-            .supported_output_configs()
-            .unwrap()
-            .find(|c| c.max_sample_rate().0 >= PREFERRED_SAMPLE_RATE);
+
+        // The only other property that could be relevant is
+        // the buffer size range, but that seems unlikely to cause
+        // problems.
+        let preferred_config = device.supported_output_configs().unwrap().find(|c| {
+            c.max_sample_rate().0 >= PREFERRED_SAMPLE_RATE
+                && c.min_sample_rate().0 <= PREFERRED_SAMPLE_RATE
+        });
+
         let buffer_size_range = preferred_config
             .as_ref()
             .map_or(default_config.buffer_size(), |value| value.buffer_size());
