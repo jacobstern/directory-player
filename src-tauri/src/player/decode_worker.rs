@@ -185,6 +185,9 @@ impl DecodeWorker {
                                     for channel in self.input_buffer.iter_mut() {
                                         channel.clear();
                                     }
+                                    if let Some(resampler) = self.resampler.as_mut() {
+                                        resampler.reset();
+                                    }
                                 }
                             }
                         }
@@ -252,6 +255,7 @@ impl DecodeWorker {
             };
 
             if packet.track_id() != self.track_id {
+                trace!("Ignoring packet with wrong track_id");
                 continue;
             }
 
