@@ -1,4 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use log::trace;
 use rtrb::{Consumer, Producer};
 
 use crate::player::process::Process;
@@ -11,6 +12,7 @@ pub struct Output {
 }
 
 const PREFERRED_BUFFER_SIZE: u32 = 1024;
+const PREFERRED_SAMPLE_RATE: u32 = 44100;
 
 impl Output {
     pub fn new(
@@ -24,14 +26,23 @@ impl Output {
         let device = host
             .default_output_device()
             .expect("no output device available");
-
         let default_config = device.default_output_config().unwrap();
-        let sample_rate = default_config.sample_rate();
-        let buffer_size_range = default_config.buffer_size();
+        let preferred_config = device
+            .supported_output_configs()
+            .unwrap()
+            .find(|c| c.max_sample_rate().0 >= PREFERRED_SAMPLE_RATE);
+        let buffer_size_range = preferred_config
+            .as_ref()
+            .map_or(default_config.buffer_size(), |value| value.buffer_size());
         let buffer_size = match buffer_size_range {
             cpal::SupportedBufferSize::Unknown => PREFERRED_BUFFER_SIZE,
             cpal::SupportedBufferSize::Range { max, min: _ } => PREFERRED_BUFFER_SIZE.min(*max),
         };
+        let sample_rate = preferred_config
+            .as_ref()
+            .map_or(default_config.sample_rate(), |value| {
+                cpal::SampleRate(value.max_sample_rate().0.min(PREFERRED_SAMPLE_RATE))
+            });
 
         let config = cpal::StreamConfig {
             channels: 2,
@@ -53,6 +64,8 @@ impl Output {
             .unwrap();
 
         stream.play().unwrap();
+
+        trace!("Stream sample rate: {:?}", sample_rate.0);
 
         Output {
             _stream: stream,

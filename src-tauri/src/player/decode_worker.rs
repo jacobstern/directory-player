@@ -101,6 +101,7 @@ impl DecodeWorker {
     ) -> Self {
         let resample_ratio = target_sample_rate as f64 / sample_rate as f64;
         let mut maybe_resampler = if sample_rate != target_sample_rate {
+            trace!("Will resample from {sample_rate} to {target_sample_rate}");
             Some(
                 FftFixedIn::new(
                     sample_rate as usize,
@@ -112,6 +113,7 @@ impl DecodeWorker {
                 .expect("Failed to create resampler"),
             )
         } else {
+            trace!("Will not resample");
             None
         };
         let mut input_buffer =
