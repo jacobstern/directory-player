@@ -224,11 +224,7 @@ impl PlaybackManager {
                         })
                 }
                 ManagerCommand::SeekTo(offset) => {
-                    self.to_process_tx
-                        .push(ManagerToProcessMsg::SeekTo(offset))
-                        .unwrap_or_else(|_| {
-                            error!("Failed to send seek message to audio thread");
-                        });
+                    self.seek_to_impl(offset);
                 }
                 ManagerCommand::OpenFileStream(playback_id, path, file_stream) => {
                     self.open_file_stream_impl(playback_id, path, file_stream);
@@ -307,8 +303,6 @@ impl PlaybackManager {
     }
 
     fn skip_back_impl(&mut self) {
-        // TODO: Should be able to skip back to a previous track in the directory even if we
-        // started playback in the middle
         let has_previous = self
             .queue
             .as_ref()
@@ -337,14 +331,31 @@ impl PlaybackManager {
     }
 
     fn progress_impl(&mut self, pos: usize) {
-        if let Some(value) = self.stream_timing.as_ref() {
-            let updated = StreamTimingInternal { pos, ..*value };
+        if let Some(stream_timing) = self.stream_timing.as_ref() {
+            let updated = StreamTimingInternal {
+                pos,
+                ..*stream_timing
+            };
             self.update_stream_timing(Some(updated));
         }
     }
 
     fn stop_impl(&mut self) {
         self.stop_playback();
+    }
+
+    fn seek_to_impl(&mut self, offset: usize) {
+        if let Some(stream_timing) = self.stream_timing.as_ref() {
+            if (offset as u64) < stream_timing.n_frames {
+                self.to_process_tx
+                    .push(ManagerToProcessMsg::SeekTo(offset))
+                    .unwrap_or_else(|_| {
+                        error!("Failed to send seek message to audio thread");
+                    });
+            } else {
+                self.play_next();
+            }
+        }
     }
 
     fn play_next(&mut self) {
