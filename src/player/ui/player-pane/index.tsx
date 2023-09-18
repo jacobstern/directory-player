@@ -5,6 +5,7 @@ import SkipForwardButton from "./skip-forward-button";
 import VolumeSlider from "./volume-slider";
 
 import "./player-pane.styles.css";
+import StopButton from "./stop-button";
 
 export default function PlayerPane() {
   return (
@@ -13,6 +14,7 @@ export default function PlayerPane() {
         <div className="player-pane__playback-buttons">
           <SkipBackButton />
           <PlayPauseButton />
+          <StopButton />
           <SkipForwardButton />
           <VolumeSlider />
         </div>

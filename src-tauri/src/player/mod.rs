@@ -123,4 +123,10 @@ impl Player {
             .send(ManagerCommand::SkipBack)
             .unwrap_or_else(|_| warn!("Failed to send skip back command to the manager"));
     }
+
+    pub fn stop(&mut self) {
+        self.command_tx
+            .send(ManagerCommand::Stop)
+            .unwrap_or_else(|_| warn!("Failed to send stop command to the manager"));
+    }
 }

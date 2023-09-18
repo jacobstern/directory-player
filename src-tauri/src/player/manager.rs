@@ -16,6 +16,7 @@ const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
 pub enum ManagerCommand {
     StartPlayback(Vec<String>, usize),
     Pause,
+    Stop,
     Progress(usize),
     PlaybackEnded,
     Resume,
@@ -196,6 +197,9 @@ impl PlaybackManager {
                         });
                     self.update_playback_state(PlaybackState::Paused);
                 }
+                ManagerCommand::Stop => {
+                    self.stop_impl();
+                }
                 ManagerCommand::Resume => {
                     self.to_process_tx
                         .push(ManagerToProcessMsg::Resume)
@@ -339,21 +343,31 @@ impl PlaybackManager {
         }
     }
 
+    fn stop_impl(&mut self) {
+        self.stop_playback();
+    }
+
     fn play_next(&mut self) {
         self.queue = self.queue.take().and_then(|queue| queue.go_next());
         if let Some(queue) = self.queue.as_ref() {
             self.start_playback(queue.current().to_owned());
         } else {
-            self.current_playback_id = None;
-            self.update_stream_timing(None);
-            self.to_process_tx
-                .push(ManagerToProcessMsg::Stop)
-                .unwrap_or_else(|_| {
-                    warn!("Failed to send stop message to audio thread for end of queue");
-                });
-            self.try_send_event(PlayerEvent::PlaybackFileChange(None));
-            self.update_playback_state(PlaybackState::Stopped);
+            self.stop_playback();
         }
+    }
+
+    fn stop_playback(&mut self) {
+        self.current_playback_id = None;
+
+        self.to_process_tx
+            .push(ManagerToProcessMsg::Stop)
+            .unwrap_or_else(|_| {
+                warn!("Failed to send stop message to audio thread");
+            });
+
+        self.try_send_event(PlayerEvent::PlaybackFileChange(None));
+        self.update_stream_timing(None);
+        self.update_playback_state(PlaybackState::Stopped);
     }
 
     fn start_playback(&mut self, path: String) {

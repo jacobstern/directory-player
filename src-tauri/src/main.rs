@@ -179,6 +179,11 @@ fn player_skip_back(player_state: tauri::State<PlayerState>) {
 }
 
 #[tauri::command]
+fn player_stop(player_state: tauri::State<PlayerState>) {
+    player_state.0.lock().unwrap().stop();
+}
+
+#[tauri::command]
 async fn show_main_window(window: tauri::Window) {
     window.get_window("main").unwrap().show().unwrap();
 }
@@ -187,6 +192,22 @@ fn try_emit_all<S: Serialize + Clone>(app_handle: &AppHandle, event: &str, paylo
     app_handle.emit_all(event, payload).unwrap_or_else(|e| {
         error!("Failed to emit {event} with {e:?}");
     });
+}
+
+async fn poll_player_events(app_handle: AppHandle, mut player_event_rx: async_runtime::Receiver<PlayerEvent>) {
+    while let Some(msg) = player_event_rx.recv().await {
+        match msg {
+            PlayerEvent::PlaybackFileChange(file) => {
+                try_emit_all(&app_handle, "player:playbackFileChange", file);
+            }
+            PlayerEvent::PlaybackStateChange(state) => {
+                try_emit_all(&app_handle, "player:playbackStateChange", state);
+            },
+            PlayerEvent::StreamTimingChange(timing) => {
+                try_emit_all(&app_handle, "player:streamTimingChange", timing);
+            }
+        }
+    }
 }
 
 fn main() {
@@ -202,6 +223,7 @@ fn main() {
             treeview_collapse_directory,
             player_play,
             player_pause,
+            player_stop,
             player_start_playback,
             player_set_volume,
             player_seek,
@@ -210,22 +232,7 @@ fn main() {
             show_main_window
         ])
         .setup(|app| {
-            let app_handle = app.handle();
-            async_runtime::spawn(async move {
-                while let Some(msg) = player_event_rx.recv().await {
-                    match msg {
-                        PlayerEvent::PlaybackFileChange(file) => {
-                            try_emit_all(&app_handle, "player:playbackFileChange", file);
-                        }
-                        PlayerEvent::PlaybackStateChange(state) => {
-                            try_emit_all(&app_handle, "player:playbackStateChange", state);
-                        },
-                        PlayerEvent::StreamTimingChange(timing) => {
-                            try_emit_all(&app_handle, "player:streamTimingChange", timing);
-                        }
-                    }
-                }
-            });
+            async_runtime::spawn(poll_player_events(app.handle(), player_event_rx));
             Ok(())
         })
         .run(tauri::generate_context!())
