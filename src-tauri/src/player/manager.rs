@@ -392,6 +392,7 @@ impl PlaybackManager {
             });
 
         info!("Starting stream for {:?}", path);
+        self.update_stream_timing(None);
         self.update_playback_state(PlaybackState::Playing);
 
         let playback_id = self.next_playback_id;
