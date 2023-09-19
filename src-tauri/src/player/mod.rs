@@ -22,7 +22,7 @@ pub enum StartPlaybackState {
 }
 
 pub enum ManagerToProcessMsg {
-    StartPlayback(FileStream, StartPlaybackState),
+    StartPlayback(u64, FileStream, StartPlaybackState),
     Pause,
     Resume,
     Stop,
@@ -32,8 +32,8 @@ pub enum ManagerToProcessMsg {
 
 #[derive(Debug)]
 pub enum ProcessToManagerMsg {
-    PlaybackPos(usize),
-    PlaybackEnded,
+    PlaybackPos(u64, usize),
+    PlaybackEnded(u64),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]

@@ -17,8 +17,8 @@ pub enum ManagerCommand {
     StartPlayback(Vec<String>, usize),
     Pause,
     Stop,
-    Progress(usize),
-    PlaybackEnded,
+    Progress(u64, usize),
+    PlaybackEnded(u64),
     Resume,
     SetVolume(f64),
     SeekTo(usize),
@@ -125,27 +125,27 @@ fn poll_process_to_gui_message(
 ) {
     let mut failed_to_send = false;
     while !failed_to_send {
-        let mut progress: Option<usize> = None;
+        // TODO: Come up with a better way to debounce/throttle these messages across the system
+        let mut debounced_progress_message: Option<ManagerCommand> = None;
         while let Ok(msg) = from_process_rx.pop() {
-            let manager_command = match msg {
-                ProcessToManagerMsg::PlaybackEnded => Some(ManagerCommand::PlaybackEnded),
-                ProcessToManagerMsg::PlaybackPos(pos) => {
-                    progress = Some(pos);
-                    None
+            match msg {
+                ProcessToManagerMsg::PlaybackEnded(playback_id) => {
+                    failed_to_send = command_tx
+                        .send(ManagerCommand::PlaybackEnded(playback_id))
+                        .is_err();
+                    if failed_to_send {
+                        break;
+                    }
+                }
+                ProcessToManagerMsg::PlaybackPos(playback_id, pos) => {
+                    debounced_progress_message = Some(ManagerCommand::Progress(playback_id, pos));
                 }
             };
-            if let Some(command) = manager_command {
-                let result = command_tx.send(command);
-                failed_to_send = result.is_err();
-                if failed_to_send {
-                    break;
-                }
-            }
         }
-        if let Some(pos) = progress {
-            let result = command_tx.send(ManagerCommand::Progress(pos));
-            failed_to_send = result.is_err();
+        if let Some(message) = debounced_progress_message {
+            failed_to_send = command_tx.send(message).is_err();
         }
+
         if !failed_to_send {
             thread::sleep(Duration::from_millis(1));
         }
@@ -208,12 +208,11 @@ impl PlaybackManager {
                         });
                     self.update_playback_state(PlaybackState::Playing);
                 }
-                ManagerCommand::Progress(pos) => {
-                    self.progress_impl(pos);
+                ManagerCommand::Progress(playback_id, pos) => {
+                    self.progress_impl(playback_id, pos);
                 }
-                ManagerCommand::PlaybackEnded => {
-                    // TODO: Check for current_playback_id
-                    self.play_next();
+                ManagerCommand::PlaybackEnded(playback_id) => {
+                    self.playback_ended_impl(playback_id);
                 }
                 ManagerCommand::SetVolume(volume) => {
                     let gain = gain_for_volume(volume);
@@ -260,6 +259,13 @@ impl PlaybackManager {
         }
     }
 
+    fn playback_ended_impl(&mut self, playback_id: u64) {
+        if self.current_playback_id != Some(playback_id) {
+            return;
+        }
+        self.play_next();
+    }
+
     fn open_file_stream_impl(&mut self, playback_id: u64, path: String, file_stream: FileStream) {
         if Some(playback_id) != self.current_playback_id {
             info!(
@@ -292,6 +298,7 @@ impl PlaybackManager {
 
         self.to_process_tx
             .push(ManagerToProcessMsg::StartPlayback(
+                playback_id,
                 file_stream,
                 start_playback_state,
             ))
@@ -330,7 +337,10 @@ impl PlaybackManager {
         }
     }
 
-    fn progress_impl(&mut self, pos: usize) {
+    fn progress_impl(&mut self, playback_id: u64, pos: usize) {
+        if self.current_playback_id != Some(playback_id) {
+            return;
+        }
         if let Some(stream_timing) = self.stream_timing.as_ref() {
             let updated = StreamTimingInternal {
                 pos,
