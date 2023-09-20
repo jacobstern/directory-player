@@ -259,6 +259,7 @@ fn main() {
             player_set_volume,
             player_seek,
             player_skip_forward,
+            player_skip_back,
         ])
         .setup(|app| {
             async_runtime::spawn(poll_player_events(app.handle(), player_event_rx));
