@@ -18,4 +18,5 @@
   grid-row-start: playback-controls;
   grid-row-end: playback-controls;
   display: flex;
+  gap: 2px;
 }

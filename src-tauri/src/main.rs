@@ -3,13 +3,15 @@
 
 mod player;
 
-use log::error;
+use log::warn;
 use player::{Player, PlayerEvent};
 use serde::Serialize;
 use std::fs::{DirEntry, ReadDir};
 use std::path::Path;
 use std::sync::Mutex;
-use tauri::{async_runtime, AppHandle, Manager};
+use tauri::{
+    async_runtime, AboutMetadata, AppHandle, CustomMenuItem, Manager, Menu, MenuItem, Submenu,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type")]
@@ -190,34 +192,63 @@ async fn show_main_window(window: tauri::Window) {
 
 fn try_emit_all<S: Serialize + Clone>(app_handle: &AppHandle, event: &str, payload: S) {
     app_handle.emit_all(event, payload).unwrap_or_else(|e| {
-        error!("Failed to emit {event} with {e:?}");
+        warn!("Failed to emit {event} with {e:?}");
     });
 }
 
-async fn poll_player_events(app_handle: AppHandle, mut player_event_rx: async_runtime::Receiver<PlayerEvent>) {
+async fn poll_player_events(
+    app_handle: AppHandle,
+    mut player_event_rx: async_runtime::Receiver<PlayerEvent>,
+) {
     while let Some(msg) = player_event_rx.recv().await {
         match msg {
             PlayerEvent::PlaybackFileChange(file) => {
-                try_emit_all(&app_handle, "player:playbackFileChange", file);
+                try_emit_all(&app_handle, "player://playback-file-change", file);
             }
             PlayerEvent::PlaybackStateChange(state) => {
-                try_emit_all(&app_handle, "player:playbackStateChange", state);
-            },
+                try_emit_all(&app_handle, "player://playback-state-change", state);
+            }
             PlayerEvent::StreamTimingChange(timing) => {
-                try_emit_all(&app_handle, "player:streamTimingChange", timing);
+                try_emit_all(&app_handle, "player://stream-timing-change", timing);
             }
         }
     }
 }
 
+fn build_menu(app_name: &str) -> Menu {
+    let file_menu = Menu::new()
+        .add_item(CustomMenuItem::new("open", "Open Folder...").accelerator("CommandOrControl+O"));
+    Menu::new()
+        .add_submenu(Submenu::new(
+            app_name,
+            Menu::new()
+                .add_native_item(MenuItem::About(
+                    app_name.to_string(),
+                    AboutMetadata::default(),
+                ))
+                .add_native_item(MenuItem::Separator)
+                .add_native_item(MenuItem::Services)
+                .add_native_item(MenuItem::Separator)
+                .add_native_item(MenuItem::Hide)
+                .add_native_item(MenuItem::HideOthers)
+                .add_native_item(MenuItem::ShowAll)
+                .add_native_item(MenuItem::Separator)
+                .add_native_item(MenuItem::Quit),
+        ))
+        .add_submenu(Submenu::new("File", file_menu))
+}
+
 fn main() {
-    let (player_event_tx, mut player_event_rx) = async_runtime::channel(1024);
+    let (player_event_tx, player_event_rx) = async_runtime::channel(1024);
     let player = Player::new(player_event_tx);
+    let menu = build_menu("directory-player");
 
     tauri::Builder::default()
+        .menu(menu)
         .plugin(tauri_plugin_log::Builder::default().build())
         .manage(PlayerState(Mutex::new(player)))
         .invoke_handler(tauri::generate_handler![
+            show_main_window,
             treeview_get_view,
             treeview_expand_directory,
             treeview_collapse_directory,
@@ -228,12 +259,18 @@ fn main() {
             player_set_volume,
             player_seek,
             player_skip_forward,
-            player_skip_back,
-            show_main_window
         ])
         .setup(|app| {
             async_runtime::spawn(poll_player_events(app.handle(), player_event_rx));
             Ok(())
+        })
+        .on_menu_event(|event| {
+            event
+                .window()
+                .emit("app://menu-event", event.menu_item_id())
+                .unwrap_or_else(|_| {
+                    warn!("Failed to emit menu-event");
+                });
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -14,7 +14,7 @@ export function PlaybackStateProvider({
   children,
 }: PlaybackStateProviderProps) {
   const value = useLatestEventPayload(
-    "player:playbackStateChange",
+    "player://playback-state-change",
     PlaybackStateSchema,
     "Stopped",
   );

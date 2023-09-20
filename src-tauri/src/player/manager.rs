@@ -195,7 +195,7 @@ impl PlaybackManager {
                         .unwrap_or_else(|_| {
                             error!("Failed to send pause message to audio thread");
                         });
-                    self.update_playback_state(PlaybackState::Paused);
+                    self.set_playback_state(PlaybackState::Paused);
                 }
                 ManagerCommand::Stop => {
                     self.stop_impl();
@@ -206,7 +206,7 @@ impl PlaybackManager {
                         .unwrap_or_else(|_| {
                             error!("Failed to send resume message to audio thread");
                         });
-                    self.update_playback_state(PlaybackState::Playing);
+                    self.set_playback_state(PlaybackState::Playing);
                 }
                 ManagerCommand::Progress(playback_id, pos) => {
                     self.progress_impl(playback_id, pos);
@@ -280,7 +280,7 @@ impl PlaybackManager {
 
         if let Some(n_frames) = n_frames {
             if let Some(time_base) = time_base {
-                self.update_stream_timing(Some(StreamTimingInternal {
+                self.set_stream_timing(Some(StreamTimingInternal {
                     time_base: *time_base,
                     n_frames,
                     pos: 0,
@@ -346,7 +346,7 @@ impl PlaybackManager {
                 pos,
                 ..*stream_timing
             };
-            self.update_stream_timing(Some(updated));
+            self.set_stream_timing(Some(updated));
         }
     }
 
@@ -387,8 +387,8 @@ impl PlaybackManager {
             });
 
         self.try_send_event(PlayerEvent::PlaybackFileChange(None));
-        self.update_stream_timing(None);
-        self.update_playback_state(PlaybackState::Stopped);
+        self.set_stream_timing(None);
+        self.set_playback_state(PlaybackState::Stopped);
     }
 
     fn start_playback(&mut self, path: String) {
@@ -402,8 +402,8 @@ impl PlaybackManager {
             });
 
         info!("Starting stream for {:?}", path);
-        self.update_stream_timing(None);
-        self.update_playback_state(PlaybackState::Playing);
+        self.set_stream_timing(None);
+        self.set_playback_state(PlaybackState::Playing);
 
         let playback_id = self.next_playback_id;
 
@@ -432,14 +432,14 @@ impl PlaybackManager {
         );
     }
 
-    fn update_playback_state(&mut self, playback_state: PlaybackState) {
+    fn set_playback_state(&mut self, playback_state: PlaybackState) {
         if self.playback_state != playback_state {
             self.playback_state = playback_state;
             self.try_send_event(PlayerEvent::PlaybackStateChange(playback_state));
         }
     }
 
-    fn update_stream_timing(&mut self, stream_timing: Option<StreamTimingInternal>) {
+    fn set_stream_timing(&mut self, stream_timing: Option<StreamTimingInternal>) {
         if self.stream_timing != stream_timing {
             let stream_timing_payload =
                 stream_timing.as_ref().map(|value| value.as_stream_timing());

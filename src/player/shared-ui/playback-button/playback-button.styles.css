@@ -17,10 +17,6 @@
   color: var(--duller-fg);
 }
 
-.playback-button + .playback-button {
-  margin-left: 2px;
-}
-
 .playback-button:not(:disabled) {
   cursor: pointer;
 }

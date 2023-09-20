@@ -25,7 +25,7 @@ export default function useGlobalPlayPauseKeyHandler() {
     }
     window.addEventListener("keydown", handleKeyDown);
     async function setupListener() {
-      unlisten = await listen("player:playbackStateChange", (event) => {
+      unlisten = await listen("player://playback-state-change", (event) => {
         playbackStateRef.current = PlaybackStateSchema.parse(event.payload);
       });
     }

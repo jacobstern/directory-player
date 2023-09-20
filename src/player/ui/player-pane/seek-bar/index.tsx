@@ -17,12 +17,15 @@ export default function SeekBar() {
   useEffect(() => {
     let unlistenProgress: VoidFunction | undefined;
     (async () => {
-      unlistenProgress = await listen("player:streamTimingChange", (event) => {
-        setStreamTiming(StreamTimingChangePayloadSchema.parse(event.payload));
-        if (!isDraggingRef.current) {
-          setOptimisticPos(undefined);
-        }
-      });
+      unlistenProgress = await listen(
+        "player://stream-timing-change",
+        (event) => {
+          setStreamTiming(StreamTimingChangePayloadSchema.parse(event.payload));
+          if (!isDraggingRef.current) {
+            setOptimisticPos(undefined);
+          }
+        },
+      );
       return () => {
         unlistenProgress?.();
       };

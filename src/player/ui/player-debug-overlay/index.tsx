@@ -8,7 +8,7 @@ export default memo(function PlayerDebugOverlay() {
   useEffect(() => {
     let unlistenProgress: VoidFunction | undefined;
     (async () => {
-      listen<PlayerProgress>("player:progress", (event) => {
+      listen<PlayerProgress>("player://progress", (event) => {
         setProgress(event.payload);
       });
     })();

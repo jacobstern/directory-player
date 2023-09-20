@@ -12,7 +12,7 @@ export interface PlaybackFileProviderProps {
 
 export function PlaybackFileProvider({ children }: PlaybackFileProviderProps) {
   const value = useLatestEventPayload(
-    "player:playbackFileChange",
+    "player://playback-file-change",
     PlaybackFileChangePayloadSchema,
     null,
   );
