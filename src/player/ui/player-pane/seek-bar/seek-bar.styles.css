@@ -30,7 +30,7 @@
 
 .seek-bar__thumb {
   opacity: 0;
-  transition: opacity 125ms ease;
+  transition: opacity var(--short-animation-duration) var(--default-ease);
   /* To avoid triggering mouse event on .seek-bar */
   pointer-events: none;
   position: absolute;

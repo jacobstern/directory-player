@@ -5,4 +5,6 @@
   --secondary-fg: #98989d;
   --accent-fg: #7fce95;
   --duller-fg: #d0d0d3;
+  --short-animation-duration: 100ms;
+  --default-ease: ease;
 }

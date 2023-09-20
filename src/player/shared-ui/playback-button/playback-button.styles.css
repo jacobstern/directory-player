@@ -6,6 +6,7 @@
   margin: 0;
   padding: 0;
   font: inherit;
+  transition: opacity var(--short-animation-duration) var(--default-ease);
 
   width: 32px;
   height: 28px;
