@@ -1,36 +1,42 @@
 import { useEffect, useRef, useState } from "react";
 
-import { listen } from "@tauri-apps/api/event";
 import { StreamTiming } from "../../../types";
 import classNames from "classnames";
 import { invoke } from "@tauri-apps/api";
 
 import "./seek-bar.styles.css";
 import { StreamTimingChangePayloadSchema } from "../../../schemas";
+import useEventListener from "../../../../tauri/hooks/use-event-listener";
+
+/**
+ * Grace period to get a new seek bar position from the server after a
+ * seek action. During this time we will always display the requested
+ * position. This also adds latency to the seek.
+ */
+const OPTIMISTIC_POS_TIMEOUT_MILLISECONDS = 200;
 
 export default function SeekBar() {
   const [streamTiming, setStreamTiming] = useState<StreamTiming | null>(null);
   const [thumbPosition, setThumbPosition] = useState<number | undefined>();
   const [optimisticPos, setOptimisticPos] = useState<number | undefined>();
   const isDraggingRef = useRef(false);
+  const optimisticPosTimeoutRef = useRef<number | undefined>();
+  const isMountedRef = useRef(false);
 
   useEffect(() => {
-    let unlistenProgress: VoidFunction | undefined;
-    (async () => {
-      unlistenProgress = await listen(
-        "player://stream-timing-change",
-        (event) => {
-          setStreamTiming(StreamTimingChangePayloadSchema.parse(event.payload));
-          if (!isDraggingRef.current) {
-            setOptimisticPos(undefined);
-          }
-        },
-      );
-      return () => {
-        unlistenProgress?.();
-      };
-    })();
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
+
+  useEventListener("player://stream-timing-change", (event) => {
+    const payload = StreamTimingChangePayloadSchema.parse(event.payload);
+    if (payload === null && optimisticPos !== undefined) {
+      setOptimisticPos(undefined);
+    }
+    setStreamTiming(payload);
+  });
 
   return (
     <div
@@ -57,6 +63,16 @@ export default function SeekBar() {
       }}
       onLostPointerCapture={() => {
         isDraggingRef.current = false;
+        if (optimisticPos !== undefined) {
+          if (optimisticPosTimeoutRef.current !== undefined) {
+            clearTimeout(optimisticPosTimeoutRef.current);
+          }
+          optimisticPosTimeoutRef.current = setTimeout(() => {
+            if (isMountedRef.current) {
+              setOptimisticPos(undefined);
+            }
+          }, OPTIMISTIC_POS_TIMEOUT_MILLISECONDS);
+        }
       }}
       onPointerUp={(e) => {
         e.currentTarget.releasePointerCapture(e.pointerId);
@@ -68,6 +84,7 @@ export default function SeekBar() {
             Math.min(1, offsetX / clientRect.width),
           );
           const offset = Math.floor(normalizedPos * streamTiming.duration);
+          setOptimisticPos(offset);
           invoke("player_seek", { offset });
         }
       }}
