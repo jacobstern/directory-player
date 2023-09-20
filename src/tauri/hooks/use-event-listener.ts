@@ -11,14 +11,19 @@ export default function useEventListener(
   }, [callback]);
   useEffect(() => {
     let unlisten: VoidFunction | undefined;
+    let needsDelayedCleanup = false;
     async function setupListener() {
       unlisten = await listen(eventName, (event) => {
         callbackRef.current(event);
       });
+      if (needsDelayedCleanup) {
+        unlisten();
+      }
     }
     setupListener();
     return () => {
       unlisten?.();
+      needsDelayedCleanup = true;
     };
   }, [eventName]);
 }
