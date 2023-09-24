@@ -5,13 +5,12 @@ import usePlaybackState from "../../../hooks/use-playback-state";
 
 export default function StopButton() {
   const playbackState = usePlaybackState();
-  const disabled = playbackState === "Stopped";
   const handleClick = async () => {
     await invoke("player_stop");
   };
   return (
     <PlaybackButton
-      disabled={disabled}
+      disabled={playbackState === "Stopped"}
       title="Stop"
       icon="Stop"
       onClick={handleClick}

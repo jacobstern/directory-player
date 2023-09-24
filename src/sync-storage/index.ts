@@ -7,6 +7,11 @@ export interface SyncStorage {
    */
   set(key: string, value: unknown): void;
   /**
+   * Get a value from the store without type safety. Returns null if
+   * the key is not present.
+   */
+  get(key: string): unknown;
+  /**
    * Get a value from the store. Throws the Zod error if the value is
    * present but cannot be deserialized according to the schema.
    */
@@ -21,10 +26,15 @@ const syncStorage: SyncStorage = {
       localStorage.setItem(key, JSON.stringify(value));
     }
   },
-  getWithSchema(key, schema) {
+  get(key) {
     const found = localStorage.getItem(key);
     if (found === null) return null;
-    return schema.parse(JSON.parse(found));
+    return JSON.parse(found);
+  },
+  getWithSchema(key, schema) {
+    const found = this.get(key);
+    if (found === null) return null;
+    return schema.parse(found);
   },
 };
 

@@ -29,7 +29,7 @@
 }
 
 .seek-bar__thumb {
-  opacity: 0;
+  opacity: 1;
   transition: opacity var(--short-animation-duration) var(--default-ease);
   /* To avoid triggering mouse event on .seek-bar */
   pointer-events: none;
@@ -41,10 +41,6 @@
   border-radius: 3px;
   top: 5.5px;
   box-shadow: 0.5px 0.5px 2px #707072;
-}
-
-.seek-bar__thumb--has-position {
-  opacity: 1;
 }
 
 .seek-bar:not(.seek-bar--can-seek:hover) .seek-bar__thumb {

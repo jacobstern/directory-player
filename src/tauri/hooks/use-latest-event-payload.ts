@@ -1,5 +1,5 @@
-import { EventName, listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { EventName } from "@tauri-apps/api/event";
+import { useState } from "react";
 import { z } from "zod";
 import useEventListener from "./use-event-listener";
 
