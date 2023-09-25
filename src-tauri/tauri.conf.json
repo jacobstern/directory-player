@@ -16,6 +16,15 @@
       "dialog": {
         "open": true
       },
+      "fs": {
+        "readDir": true,
+        "readFile": true,
+        "exists": true,
+        "scope": ["**"]
+      },
+      "path": {
+        "all": true
+      },
       "shell": {
         "all": false,
         "open": true

@@ -12,15 +12,15 @@ import { attachConsole } from "tauri-plugin-log-api";
 import App from "./App";
 import { rootReducer } from "./rootReducer";
 import { treeviewInit } from "./treeview/actions";
-import { treeviewDirectory } from "./treeview";
 import { TreeviewView } from "./treeview/types";
 import { PlaybackFileProvider, PlaybackStateProvider } from "./player";
+import { initFileListing } from "./treeview/core/file-listing";
 
 async function main() {
   await attachConsole();
-  await treeviewDirectory.init();
 
   const treeviewView = await invoke<TreeviewView>("treeview_get_view");
+  const fileListing = await initFileListing();
 
   const store = createStore(rootReducer);
   store.dispatch(treeviewInit(treeviewView));
