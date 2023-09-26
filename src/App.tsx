@@ -1,6 +1,6 @@
 import useGlobalPlayPauseKeyHandler from "./hooks/use-global-play-pause-key-event-handler";
 import { PlayerPane } from "./player";
-import TreeviewPane from "./treeview/TreeviewPane";
+import TreeviewPane from "./treeview/ui/treeview-pane";
 import { debug } from "tauri-plugin-log-api";
 
 import "./App.css";
@@ -11,6 +11,7 @@ function App() {
   useEventListener("app://menu-event", (e) => {
     debug(`${e.payload}`);
   });
+
   return (
     <main className="app">
       <PlayerPane />

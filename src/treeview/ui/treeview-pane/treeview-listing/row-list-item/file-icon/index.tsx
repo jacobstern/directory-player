@@ -1,15 +1,14 @@
+import { FileType } from "../../../../../core/file-type";
 import "./file-icon.styles.css";
 
-export type FileIconType = "Directory" | "MusicFile" | "File";
-
 export interface FileIconProps {
-  type: FileIconType;
+  fileType: FileType;
 }
 
-export default function FileIcon({ type }: FileIconProps) {
+export default function FileIcon({ fileType }: FileIconProps) {
   let iconNode: React.ReactNode;
-  switch (type) {
-    case "MusicFile":
+  switch (fileType) {
+    case "music-file":
       iconNode = (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -23,7 +22,7 @@ export default function FileIcon({ type }: FileIconProps) {
         </svg>
       );
       break;
-    case "File":
+    case "file":
       iconNode = (
         <svg
           xmlns="http://www.w3.org/2000/svg"

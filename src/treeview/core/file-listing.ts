@@ -5,11 +5,21 @@ import syncStorage from "../../sync-storage";
 import { readDir } from "@tauri-apps/api/fs";
 import { warn } from "tauri-plugin-log-api";
 import { normalize } from "@tauri-apps/api/path";
+import { BasicPubSub } from "./basic-pub-sub";
 
 const DIRECTORY_STORAGE_KEY = "treeviewDirectory";
 
 export interface File {
+  /**
+   * Following the Tauri API, a missing children property indicates
+   * that this is not a directory.
+   */
   children?: File[];
+  /**
+   * If this is not set then the children list is not up to date and
+   * should be ignored.
+   */
+  isExpanded?: boolean;
   name?: string;
   path: string;
 }
@@ -21,11 +31,13 @@ export interface RootDirectory {
 
 export type Root = RootDirectory | null;
 
-export type ChangeHandler = (type: "root" | "subdir", path?: string) => void;
+export type ChangeListener = () => void;
+
+export type UnsubscribeFunction = VoidFunction;
 
 export interface FileListing {
   getRoot(): Root;
-  setChangeHandler(handler: ChangeHandler | null): void;
+  addChangeListener(listener: ChangeListener): UnsubscribeFunction;
   /**
    * Detach event listeners etc.
    */
@@ -34,7 +46,7 @@ export interface FileListing {
 
 export async function initFileListing(): Promise<FileListing> {
   let root: Root = null;
-  let changeHandler: ChangeHandler | null = null;
+  const pubSub = new BasicPubSub();
 
   const handleMenuEvent = (menuItemId: string) => {
     if (menuItemId === "open") {
@@ -54,15 +66,16 @@ export async function initFileListing(): Promise<FileListing> {
       if (updated) {
         root = updated;
         syncStorage.set(DIRECTORY_STORAGE_KEY, path);
-        changeHandler?.("root", path);
+        pubSub.notify();
       }
     }
   };
   const readRootDir = async (path: string): Promise<RootDirectory> => {
     const normalizedPath = await normalize(path);
+    const listing = await readDir(normalizedPath, { recursive: false });
     return {
       path: normalizedPath,
-      children: await readDir(normalizedPath),
+      children: listing,
     };
   };
 
@@ -87,8 +100,8 @@ export async function initFileListing(): Promise<FileListing> {
     getRoot() {
       return root;
     },
-    setChangeHandler(handler) {
-      changeHandler = handler;
+    addChangeListener(listener) {
+      return pubSub.listen(listener);
     },
     dispose() {
       unlistenMenuEvent();

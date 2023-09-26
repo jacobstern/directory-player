@@ -15,6 +15,7 @@ import { treeviewInit } from "./treeview/actions";
 import { TreeviewView } from "./treeview/types";
 import { PlaybackFileProvider, PlaybackStateProvider } from "./player";
 import { initFileListing } from "./treeview/core/file-listing";
+import { FileListingContext } from "./treeview/context/file-listing-context";
 
 async function main() {
   await attachConsole();
@@ -29,9 +30,11 @@ async function main() {
     <React.StrictMode>
       <PlaybackFileProvider>
         <PlaybackStateProvider>
-          <Provider store={store}>
-            <App />
-          </Provider>
+          <FileListingContext.Provider value={fileListing}>
+            <Provider store={store}>
+              <App />
+            </Provider>
+          </FileListingContext.Provider>
         </PlaybackStateProvider>
       </PlaybackFileProvider>
     </React.StrictMode>,

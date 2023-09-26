@@ -1,6 +1,5 @@
-import "./TreeviewPane.css";
-
-import TreeviewListing from "./TreeviewListing";
+import TreeviewListing from "./treeview-listing";
+import "./treeview-pane.styles.css";
 
 export default function TreeviewPane() {
   return (
