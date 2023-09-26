@@ -13,8 +13,10 @@ export interface RowListItemProps {
   fileType: FileType;
   depth: number;
   isExpanded?: boolean;
+  isPlaying: boolean;
   onExpandDirectory: (path: string) => void;
   onCollapseDirectory: (path: string) => void;
+  onPlayback: (path: string) => void;
 }
 
 const RowListItem = memo(function RowListItem({
@@ -23,10 +25,11 @@ const RowListItem = memo(function RowListItem({
   fileType,
   depth,
   isExpanded,
+  isPlaying,
   onExpandDirectory,
   onCollapseDirectory,
+  onPlayback: onPlay,
 }: RowListItemProps) {
-  const isPlaying = false;
   const firstColStyle: React.CSSProperties = {
     paddingLeft: depth * 8,
   };
@@ -37,6 +40,9 @@ const RowListItem = memo(function RowListItem({
       onExpandDirectory(path);
     }
   };
+  const handleDoubleClick = () => {
+    onPlay(path);
+  };
 
   const nameClasses = classNames("row-list-item__name", {
     "row-list-item__name--no-left-indicator":
@@ -44,7 +50,7 @@ const RowListItem = memo(function RowListItem({
   });
 
   return (
-    <li className="row-list-item">
+    <li className="row-list-item" onDoubleClick={handleDoubleClick}>
       {isPlaying && <PlayingIndicator />}
       <div className="row-list-item__first-col" style={firstColStyle}>
         {fileType === "directory" && (

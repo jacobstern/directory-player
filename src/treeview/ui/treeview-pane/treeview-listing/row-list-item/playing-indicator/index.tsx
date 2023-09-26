@@ -2,6 +2,8 @@ import { memo } from "react";
 import usePlaybackState from "../../../../../../player/hooks/use-playback-state";
 import classNames from "classnames";
 
+import "./playing-indicator.styles.css";
+
 const PlayingIndicator = memo(function PlayingIndicator() {
   const playbackState = usePlaybackState();
   return (

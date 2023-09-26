@@ -59,29 +59,30 @@ export async function initFileListing(): Promise<FileListing> {
   const openDialog = async (): Promise<void> => {
     const path = await open({ directory: true });
     if (typeof path === "string") {
-      let updated: Root = null;
+      let success = false;
       try {
-        updated = await readRootDir(path);
+        await readRootDir(path);
+        success = true;
       } catch {
         // TODO: Surface error
       }
 
-      if (updated) {
-        root = updated;
+      if (success) {
         syncStorage.set(DIRECTORY_STORAGE_KEY, path);
         pubSub.notify();
       }
     }
   };
-  const readRootDir = async (path: string): Promise<RootDirectory> => {
+  const readRootDir = async (path: string): Promise<void> => {
     const normalizedPath = await normalize(path);
     const listing = await readDir(normalizedPath, { recursive: false });
+    directoryReverseLookup.clear();
     for (const child of listing) {
       if (child.children !== undefined) {
         directoryReverseLookup.set(child.path, child);
       }
     }
-    return {
+    root = {
       path: normalizedPath,
       children: listing,
     };
@@ -92,7 +93,7 @@ export async function initFileListing(): Promise<FileListing> {
   );
   if (persistedDir !== null) {
     try {
-      root = await readRootDir(persistedDir);
+      await readRootDir(persistedDir);
     } catch (e) {
       warn(`Failed to load persisted root with "${e}"`);
       syncStorage.set(DIRECTORY_STORAGE_KEY, null);

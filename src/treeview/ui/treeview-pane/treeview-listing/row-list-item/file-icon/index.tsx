@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { FileType } from "../../../../../core/file-type";
 import "./file-icon.styles.css";
 
@@ -5,7 +6,7 @@ export interface FileIconProps {
   fileType: FileType;
 }
 
-export default function FileIcon({ fileType }: FileIconProps) {
+const FileIcon = memo(function FileIcon({ fileType }: FileIconProps) {
   let iconNode: React.ReactNode;
   switch (fileType) {
     case "music-file":
@@ -52,4 +53,6 @@ export default function FileIcon({ fileType }: FileIconProps) {
       );
   }
   return <i className="file-icon">{iconNode}</i>;
-}
+});
+
+export default FileIcon;
