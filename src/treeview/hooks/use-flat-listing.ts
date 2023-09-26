@@ -1,15 +1,9 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import FileListingContext from "../context/file-listing-context";
 import { FlatListing, generateFullListing } from "../core/flat-listing";
-import { ChangeListener } from "../core/file-listing";
+import { ChangeListener, FileListing } from "../core/file-listing";
 
-export default function useFlatListing(): FlatListing {
-  const fileListing = useContext(FileListingContext);
-  if (fileListing === null) {
-    throw new Error("File listing context must be initialized.");
-  }
-
+export default function useFlatListing(fileListing: FileListing): FlatListing {
   const initialListing = generateFullListing(fileListing.getRoot());
   const [flatListing, setFlatListing] = useState<FlatListing>(initialListing);
 

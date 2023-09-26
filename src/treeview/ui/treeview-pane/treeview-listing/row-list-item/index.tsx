@@ -13,6 +13,8 @@ export interface RowListItemProps {
   fileType: FileType;
   depth: number;
   isExpanded?: boolean;
+  onExpandDirectory: (path: string) => void;
+  onCollapseDirectory: (path: string) => void;
 }
 
 const RowListItem = memo(function RowListItem({
@@ -21,12 +23,20 @@ const RowListItem = memo(function RowListItem({
   fileType,
   depth,
   isExpanded,
+  onExpandDirectory,
+  onCollapseDirectory,
 }: RowListItemProps) {
   const isPlaying = false;
   const firstColStyle: React.CSSProperties = {
     paddingLeft: depth * 8,
   };
-  const handleToggle = () => {};
+  const handleToggle = () => {
+    if (isExpanded) {
+      onCollapseDirectory(path);
+    } else {
+      onExpandDirectory(path);
+    }
+  };
 
   const nameClasses = classNames("row-list-item__name", {
     "row-list-item__name--no-left-indicator":

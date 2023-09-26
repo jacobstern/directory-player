@@ -16,32 +16,37 @@ interface FlatListingStackItem {
   file: File;
 }
 
-function fileComparator(l: File, r: File): number {
-  const lName = l.name ?? "";
-  const rName = r.name ?? "";
-  return lName.localeCompare(rName);
+function filterFiles(file: File): boolean {
+  if (file.name === undefined) {
+    return false;
+  }
+  if (file.name.startsWith(".")) {
+    return false;
+  }
+  return true;
 }
 
 function recursivelyFlatten(files: File[]): FlatListingItem[] {
   const listing: FlatListingItem[] = [];
-  const sortedFiles = files.slice().sort(fileComparator);
-  const stack: FlatListingStackItem[] = sortedFiles.map((file) => ({
+  const collator = new Intl.Collator();
+  const compareFiles = (l: File, r: File) => collator.compare(r.name!, l.name!);
+  const rootFiles = files.filter(filterFiles).sort(compareFiles);
+  const stack: FlatListingStackItem[] = rootFiles.map((file) => ({
     depth: 0,
     file,
   }));
   while (stack.length > 0) {
     const { file, depth } = stack.pop()!;
     const { children, name, path, isExpanded } = file;
-    if (name === undefined) continue;
     listing.push({
       fileType: getFileType(file),
       isExpanded,
       depth,
-      name,
+      name: name!,
       path,
     });
     if (isExpanded && children) {
-      for (const child of children.slice().sort(fileComparator)) {
+      for (const child of children.filter(filterFiles).sort(compareFiles)) {
         stack.push({
           depth: depth + 1,
           file: child,

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { union, z } from "zod";
 import { open } from "@tauri-apps/api/dialog";
 import { listen } from "@tauri-apps/api/event";
 import syncStorage from "../../sync-storage";
@@ -38,6 +38,8 @@ export type UnsubscribeFunction = VoidFunction;
 export interface FileListing {
   getRoot(): Root;
   addChangeListener(listener: ChangeListener): UnsubscribeFunction;
+  expandDirectory(path: string): void;
+  collapseDirectory(path: string): void;
   /**
    * Detach event listeners etc.
    */
@@ -47,6 +49,7 @@ export interface FileListing {
 export async function initFileListing(): Promise<FileListing> {
   let root: Root = null;
   const pubSub = new BasicPubSub();
+  const directoryReverseLookup = new Map<string, File>();
 
   const handleMenuEvent = (menuItemId: string) => {
     if (menuItemId === "open") {
@@ -73,12 +76,16 @@ export async function initFileListing(): Promise<FileListing> {
   const readRootDir = async (path: string): Promise<RootDirectory> => {
     const normalizedPath = await normalize(path);
     const listing = await readDir(normalizedPath, { recursive: false });
+    for (const child of listing) {
+      if (child.children !== undefined) {
+        directoryReverseLookup.set(child.path, child);
+      }
+    }
     return {
       path: normalizedPath,
       children: listing,
     };
   };
-
   const persistedDir = syncStorage.getWithSchema(
     DIRECTORY_STORAGE_KEY,
     z.string(),
@@ -102,6 +109,34 @@ export async function initFileListing(): Promise<FileListing> {
     },
     addChangeListener(listener) {
       return pubSub.listen(listener);
+    },
+    async expandDirectory(path) {
+      const directory = directoryReverseLookup.get(path);
+      if (directory === undefined) {
+        throw new Error(`Failed to locate directory at "${path}"`);
+      }
+      if (directory.isExpanded) return;
+      directory.isExpanded = true;
+      const children = await readDir(path, { recursive: false });
+      directory.children = children;
+      for (const child of children) {
+        if (child.children !== undefined) {
+          directoryReverseLookup.set(child.path, child);
+        }
+      }
+      pubSub.notify();
+    },
+    async collapseDirectory(path) {
+      const directory = directoryReverseLookup.get(path);
+      if (directory === undefined) {
+        throw new Error(`Failed to locate directory at "${path}"`);
+      }
+      if (!directory.isExpanded || !directory.children) return;
+      for (const child of directory.children) {
+        directoryReverseLookup.delete(child.path);
+      }
+      directory.children = [];
+      pubSub.notify();
     },
     dispose() {
       unlistenMenuEvent();
