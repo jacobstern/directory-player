@@ -33,7 +33,7 @@ const RowListItem = memo(function RowListItem({
   const firstColStyle: React.CSSProperties = {
     paddingLeft: depth * 8,
   };
-  const handleToggle = () => {
+  const toggleExpanded = () => {
     if (isExpanded) {
       onCollapseDirectory(path);
     } else {
@@ -41,7 +41,11 @@ const RowListItem = memo(function RowListItem({
     }
   };
   const handleDoubleClick = () => {
-    onPlay(path);
+    if (fileType === "music-file") {
+      onPlay(path);
+    } else if (fileType === "directory") {
+      toggleExpanded();
+    }
   };
 
   const nameClasses = classNames("row-list-item__name", {
@@ -54,7 +58,7 @@ const RowListItem = memo(function RowListItem({
       {isPlaying && <PlayingIndicator />}
       <div className="row-list-item__first-col" style={firstColStyle}>
         {fileType === "directory" && (
-          <ExpandButton isExpanded={isExpanded} onToggle={handleToggle} />
+          <ExpandButton isExpanded={isExpanded} onToggle={toggleExpanded} />
         )}
         <div className={nameClasses}>
           <FileIcon fileType={fileType} />

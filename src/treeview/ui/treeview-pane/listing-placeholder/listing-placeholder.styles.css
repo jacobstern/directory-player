@@ -1,0 +1,14 @@
+.listing-placeholder {
+  padding: 20px;
+  font-size: 14px;
+  width: 500px;
+  text-align: center;
+  margin: 80px auto 0;
+  color: var(--primary-fg);
+  text-shadow: 0.5px 0.5px 2px #707072;
+}
+
+.listing-placeholder__verbatim {
+  display: inline;
+  font-weight: bold;
+}

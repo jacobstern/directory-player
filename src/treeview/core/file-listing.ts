@@ -1,4 +1,4 @@
-import { union, z } from "zod";
+import { z } from "zod";
 import { open } from "@tauri-apps/api/dialog";
 import { listen } from "@tauri-apps/api/event";
 import syncStorage from "../../sync-storage";
@@ -48,6 +48,7 @@ export interface FileListing {
 
 export async function initFileListing(): Promise<FileListing> {
   let root: Root = null;
+  let isDialogOpen = false;
   const pubSub = new BasicPubSub();
   const directoryReverseLookup = new Map<string, File>();
 
@@ -57,7 +58,17 @@ export async function initFileListing(): Promise<FileListing> {
     }
   };
   const openDialog = async (): Promise<void> => {
-    const path = await open({ directory: true });
+    if (isDialogOpen) {
+      return;
+    }
+    isDialogOpen = true;
+    let path: string | string[] | null = null;
+    try {
+      path = await open({ directory: true });
+    } finally {
+      isDialogOpen = false;
+    }
+
     if (typeof path === "string") {
       let success = false;
       try {
@@ -137,6 +148,7 @@ export async function initFileListing(): Promise<FileListing> {
         directoryReverseLookup.delete(child.path);
       }
       directory.children = [];
+      directory.isExpanded = false;
       pubSub.notify();
     },
     dispose() {
