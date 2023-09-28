@@ -3,9 +3,9 @@ import { FileType } from "../../../../core/file-type";
 import classNames from "classnames";
 import ExpandButton from "./expand-button";
 import FileIcon from "./file-icon";
+import PlayingIndicator from "./playing-indicator";
 
 import "./row-list-item.styles.css";
-import PlayingIndicator from "./playing-indicator";
 
 export interface RowListItemProps {
   path: string;
