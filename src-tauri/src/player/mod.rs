@@ -65,10 +65,16 @@ pub enum PlayerEvent {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct StreamMetadataVisual {
+    pub data_base64: String,
+    pub media_type: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StreamMetadata {
     pub track_title: Option<String>,
     pub artist: Option<String>,
-    pub album_cover_base64: Option<String>,
+    pub album_cover: Option<StreamMetadataVisual>,
 }
 
 pub struct Player {

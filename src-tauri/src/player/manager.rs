@@ -12,7 +12,7 @@ use crate::player::{file_stream::FileStream, PlaybackFile, StreamMetadata};
 
 use super::{
     errors::FileStreamOpenError, output::Output, ManagerToProcessMsg, PlaybackState, PlayerEvent,
-    ProcessToManagerMsg, StartPlaybackState, StreamTiming,
+    ProcessToManagerMsg, StartPlaybackState, StreamMetadataVisual, StreamTiming,
 };
 
 const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
@@ -318,12 +318,14 @@ impl PlaybackManager {
                 .visuals()
                 .into_iter()
                 .find(|visual| visual.usage == Some(StandardVisualKey::FrontCover));
-            let album_cover_base64 = album_cover_visual
-                .map(|visual| general_purpose::URL_SAFE.encode(visual.data.as_ref()));
+            let album_cover = album_cover_visual.map(|visual| StreamMetadataVisual {
+                media_type: visual.media_type.to_owned(),
+                data_base64: general_purpose::URL_SAFE.encode(visual.data.as_ref()),
+            });
             StreamMetadata {
                 track_title,
                 artist,
-                album_cover_base64,
+                album_cover,
             }
         });
         self.try_send_event(PlayerEvent::StreamMetadataChange(meta));

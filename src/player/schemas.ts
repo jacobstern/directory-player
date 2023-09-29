@@ -17,10 +17,15 @@ export const StreamTimingSchema = z.object({
 
 export const StreamTimingChangePayloadSchema = z.nullable(StreamTimingSchema);
 
+export const StreamMetadataVisualSchema = z.object({
+  media_type: z.string(),
+  data_base64: z.string(),
+});
+
 export const StreamMetadataSchema = z.object({
   track_title: z.string().nullable(),
   artist: z.string().nullable(),
-  album_cover_base64: z.string().nullable(),
+  album_cover: StreamMetadataVisualSchema.nullable(),
 });
 
 export const StreamMetadataPayloadSchema = z.nullable(StreamMetadataSchema);

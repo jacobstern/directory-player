@@ -1,4 +1,49 @@
 .stream-metadata {
+  opacity: 0;
+  transition: opacity var(--short-animation-duration) var(--default-ease);
+  display: flex;
+  color: var(--main-fg);
   position: absolute;
-  left: 0;
+  width: 300px;
+  overflow: hidden;
+  top: 10px;
+  left: 10px;
+  font-size: 13px;
+  line-height: 22px;
+  padding-bottom: 4px;
+}
+
+.stream-metadata--has-metadata {
+  opacity: 1;
+}
+
+.stream-metadata__image,
+.stream-metadata__image-placeholder {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  margin-right: 12px;
+  background: #2a604b;
+  box-shadow: 0.5px 0.5px 2px #303038;
+}
+
+.stream-metadata__title-and-artist {
+  display: flex;
+  flex-flow: column;
+}
+
+.stream-metadata__title,
+.stream-metadata__artist {
+  user-select: none;
+  cursor: default;
+  /* TODO: Dynamic width based on window size */
+  max-width: 256px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0.5px 0.5px 2px #303038;
+}
+
+.stream-metadata__artist {
+  color: var(--duller-fg);
 }
