@@ -4,13 +4,11 @@
   display: flex;
   color: var(--main-fg);
   position: absolute;
-  width: 300px;
   overflow: hidden;
-  top: 10px;
+  top: 0;
   left: 10px;
   font-size: 13px;
-  line-height: 22px;
-  padding-bottom: 4px;
+  line-height: 24px;
 }
 
 .stream-metadata--has-metadata {

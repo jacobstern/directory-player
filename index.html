@@ -5,9 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>directory-player</title>
+    <style type="text/css">
+      .titlebar {
+        height: 30px;
+        user-select: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background-color:  #202020;
+        z-index: 9001;
+      }
+    </style>
   </head>
 
   <body>
+    <div data-tauri-drag-region class="titlebar"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

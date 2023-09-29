@@ -28,6 +28,9 @@
       "shell": {
         "all": false,
         "open": true
+      },
+      "window": {
+        "all": true
       }
     },
     "bundle": {
@@ -50,9 +53,11 @@
         "fullscreen": false,
         "resizable": true,
         "title": "directory-player",
-        "width": 1000,
-        "height": 750,
-        "visible": false
+        "width": 800,
+        "height": 600,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ]
   }
