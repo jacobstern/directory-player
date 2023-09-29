@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use log::{trace, warn};
 use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::meta::MetadataRevision;
 use symphonia::core::units::TimeBase;
 use symphonia::core::{io::MediaSourceStream, probe::Hint};
 
@@ -58,6 +59,7 @@ pub struct FileStream {
     stream_id: u32,
     n_frames: Option<u64>,
     time_base: Option<TimeBase>,
+    metadata: Option<MetadataRevision>,
 }
 
 impl FileStream {
@@ -74,7 +76,7 @@ impl FileStream {
         let source = Box::new(File::open(file.clone())?);
         let mss = MediaSourceStream::new(source, Default::default());
 
-        let probed = symphonia::default::get_probe().format(
+        let mut probed = symphonia::default::get_probe().format(
             &hint,
             mss,
             &Default::default(),
@@ -120,6 +122,16 @@ impl FileStream {
         let block_size = decoded.capacity().max(MIN_BLOCK_SIZE);
         let num_channels = spec.channels.count();
 
+        // Prefer metadata that's provided in the container format over other tags found during the
+        // probe operation.
+        let metadata = reader.metadata().current().cloned().or_else(|| {
+            probed
+                .metadata
+                .get()
+                .as_ref()
+                .and_then(|metadata| metadata.current().cloned())
+        });
+
         let (from_worker_producer, from_worker_consumer) =
             rtrb::RingBuffer::new(MESSAGE_BUFFER_SIZE);
         let (to_worker_producer, to_worker_consumer) = rtrb::RingBuffer::new(MESSAGE_BUFFER_SIZE);
@@ -149,6 +161,7 @@ impl FileStream {
             stream_id: 0,
             n_frames,
             time_base,
+            metadata,
         })
     }
 
@@ -167,6 +180,10 @@ impl FileStream {
     pub fn is_ready(&mut self) -> bool {
         self.poll();
         self.blocks.is_some()
+    }
+
+    pub fn metadata(&self) -> Option<&MetadataRevision> {
+        self.metadata.as_ref()
     }
 
     pub fn read(&mut self, frames: usize) -> Option<ReadData> {

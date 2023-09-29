@@ -105,6 +105,9 @@ async fn poll_player_events(
             PlayerEvent::StreamTimingChange(timing) => {
                 try_emit_all(&app_handle, "player://stream-timing-change", timing);
             }
+            PlayerEvent::StreamMetadataChange(metadata) => {
+                try_emit_all(&app_handle, "player://stream-metadata-change", metadata);
+            }
         }
     }
 }

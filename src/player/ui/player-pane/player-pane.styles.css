@@ -1,6 +1,8 @@
 .player-pane {
   display: flex;
+  position: relative;
   justify-content: center;
+  align-items: center;
   padding: 8px 0;
   background-color: #202020;
   box-shadow: 0 0 13px #202026;
@@ -9,6 +11,7 @@
 }
 
 .player-pane__controls {
+  justify-self: flex-start;
   display: grid;
   grid-template-rows: [playback-controls] auto [seek-bar];
   max-width: 800px;

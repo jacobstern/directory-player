@@ -61,6 +61,14 @@ pub enum PlayerEvent {
     PlaybackFileChange(Option<PlaybackFile>),
     PlaybackStateChange(PlaybackState),
     StreamTimingChange(Option<StreamTiming>),
+    StreamMetadataChange(Option<StreamMetadata>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct StreamMetadata {
+    pub track_title: Option<String>,
+    pub artist: Option<String>,
+    pub album_cover_base64: Option<String>,
 }
 
 pub struct Player {

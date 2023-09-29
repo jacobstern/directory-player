@@ -1,10 +1,14 @@
 use std::{path::Path, sync::mpsc, thread, time::Duration};
 
+use base64::{engine::general_purpose, Engine};
 use log::{error, info, warn};
 use rtrb::RingBuffer;
-use symphonia::core::units::{Time, TimeBase};
+use symphonia::core::{
+    meta::{StandardTagKey, StandardVisualKey, Value},
+    units::{Time, TimeBase},
+};
 
-use crate::player::{file_stream::FileStream, PlaybackFile};
+use crate::player::{file_stream::FileStream, PlaybackFile, StreamMetadata};
 
 use super::{
     errors::FileStreamOpenError, output::Output, ManagerToProcessMsg, PlaybackState, PlayerEvent,
@@ -288,6 +292,42 @@ impl PlaybackManager {
             }
         }
 
+        let meta: Option<StreamMetadata> = file_stream.metadata().map(|metadata| {
+            let tags = metadata.tags();
+            let track_title_tag = tags
+                .into_iter()
+                .find(|tag| tag.std_key == Some(StandardTagKey::TrackTitle));
+            let track_title = track_title_tag.as_ref().and_then(|tag| {
+                if let Value::String(s) = tag.value.clone() {
+                    Some(s)
+                } else {
+                    None
+                }
+            });
+            let artist_tag = tags
+                .into_iter()
+                .find(|tag| tag.std_key == Some(StandardTagKey::Artist));
+            let artist = artist_tag.as_ref().and_then(|tag| {
+                if let Value::String(s) = tag.value.clone() {
+                    Some(s)
+                } else {
+                    None
+                }
+            });
+            let album_cover_visual = metadata
+                .visuals()
+                .into_iter()
+                .find(|visual| visual.usage == Some(StandardVisualKey::FrontCover));
+            let album_cover_base64 = album_cover_visual
+                .map(|visual| general_purpose::URL_SAFE.encode(visual.data.as_ref()));
+            StreamMetadata {
+                track_title,
+                artist,
+                album_cover_base64,
+            }
+        });
+        self.try_send_event(PlayerEvent::StreamMetadataChange(meta));
+
         assert_ne!(self.playback_state, PlaybackState::Stopped);
 
         let start_playback_state = if self.playback_state == PlaybackState::Paused {
@@ -389,6 +429,7 @@ impl PlaybackManager {
         self.try_send_event(PlayerEvent::PlaybackFileChange(None));
         self.set_stream_timing(None);
         self.set_playback_state(PlaybackState::Stopped);
+        self.try_send_event(PlayerEvent::StreamMetadataChange(None));
     }
 
     fn start_playback(&mut self, path: String) {
@@ -404,6 +445,7 @@ impl PlaybackManager {
         info!("Starting stream for {:?}", path);
         self.set_stream_timing(None);
         self.set_playback_state(PlaybackState::Playing);
+        self.try_send_event(PlayerEvent::StreamMetadataChange(None));
 
         let playback_id = self.next_playback_id;
 
