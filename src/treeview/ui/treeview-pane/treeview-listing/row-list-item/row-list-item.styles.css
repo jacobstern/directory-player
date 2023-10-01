@@ -7,6 +7,7 @@
   align-items: center;
   padding-left: 4px;
   cursor: default;
+  transition: background-color 175ms ease;
 }
 
 .row-list-item:hover {

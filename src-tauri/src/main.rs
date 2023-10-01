@@ -11,24 +11,6 @@ use tauri::{
     async_runtime, AboutMetadata, AppHandle, CustomMenuItem, Manager, Menu, MenuItem, Submenu,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "type")]
-enum TreeviewItem {
-    Directory {
-        name: String,
-        path: String,
-        children: Vec<TreeviewItem>,
-        #[serde(rename = "isExpanded")]
-        is_expanded: bool,
-    },
-    File {
-        name: String,
-        path: String,
-        #[serde(rename = "canPlay")]
-        can_play: bool,
-    },
-}
-
 struct PlayerState(Mutex<Player>);
 
 #[tauri::command]

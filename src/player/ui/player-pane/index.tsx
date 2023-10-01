@@ -10,8 +10,7 @@ import StreamMetadata from "./stream-metadata";
 
 export default function PlayerPane() {
   return (
-    <section className="player-pane">
-      <StreamMetadata />
+    <section className="player-pane" data-tauri-drag-region>
       <div className="player-pane__controls">
         <div className="player-pane__playback-buttons">
           <SkipBackButton />
@@ -22,6 +21,7 @@ export default function PlayerPane() {
         </div>
         <SeekBar />
       </div>
+      <StreamMetadata />
     </section>
   );
 }

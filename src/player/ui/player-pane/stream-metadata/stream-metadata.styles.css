@@ -1,12 +1,14 @@
 .stream-metadata {
+  min-width: 0;
+  user-select: none;
+  pointer-events: none;
   opacity: 0;
-  transition: opacity var(--short-animation-duration) var(--default-ease);
+  /* transition: opacity var(--short-animation-duration) var(--default-ease); */
   display: flex;
   color: var(--main-fg);
-  position: absolute;
+  padding-top: 3px;
+  z-index: 5;
   overflow: hidden;
-  top: 0;
-  left: 10px;
   font-size: 13px;
   line-height: 24px;
 }
@@ -17,15 +19,18 @@
 
 .stream-metadata__image,
 .stream-metadata__image-placeholder {
+  border-radius: 1px;
   width: 44px;
   min-width: 44px;
   height: 44px;
+  margin-top: 2px;
   margin-right: 12px;
   background: #2a604b;
   box-shadow: 0.5px 0.5px 2px #303038;
 }
 
-.stream-metadata__title-and-artist {
+.stream-metadata__second-column {
+  min-width: 0;
   display: flex;
   flex-flow: column;
 }
@@ -34,8 +39,6 @@
 .stream-metadata__artist {
   user-select: none;
   cursor: default;
-  /* TODO: Dynamic width based on window size */
-  max-width: 256px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

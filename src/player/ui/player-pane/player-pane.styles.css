@@ -1,9 +1,10 @@
 .player-pane {
   display: flex;
   position: relative;
-  justify-content: center;
-  align-items: center;
-  padding-bottom: 8px;
+  justify-content: flex-start;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 8px 8px 2px 84px;
   background-color: #202020;
   box-shadow: 0 0 13px #202026;
   z-index: 1;

@@ -7,7 +7,7 @@ import useEventListener from "../../../../tauri/hooks/use-event-listener";
 import debounce from "../../../../utils/debounce";
 import classNames from "classnames";
 
-const EVENT_LISTENER_DEBOUNCE_MILLIS = 300;
+const EVENT_LISTENER_DEBOUNCE_MILLIS = 100;
 
 export default function StreamMetadata() {
   const [latestMetadata, setLatestMetadata] =
@@ -51,17 +51,11 @@ export default function StreamMetadata() {
             />
           )}
 
-          <div className="stream-metadata__title-and-artist">
-            <div
-              className="stream-metadata__title"
-              title={latestMetadata.track_title ?? undefined}
-            >
+          <div className="stream-metadata__second-column">
+            <div className="stream-metadata__title">
               {latestMetadata.track_title}
             </div>
-            <div
-              className="stream-metadata__artist"
-              title={latestMetadata.artist ?? undefined}
-            >
+            <div className="stream-metadata__artist">
               {latestMetadata.artist}
             </div>
           </div>
