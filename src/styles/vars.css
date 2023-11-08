@@ -6,5 +6,6 @@
   --accent-fg: #7fce95;
   --duller-fg: #d0d0d3;
   --short-animation-duration: 100ms;
+  --medium-animation-duration: 175ms;
   --default-ease: ease;
 }

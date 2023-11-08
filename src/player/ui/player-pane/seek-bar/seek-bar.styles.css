@@ -1,6 +1,6 @@
 .seek-bar {
   position: relative;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .seek-bar--can-seek {
@@ -30,7 +30,7 @@
 
 .seek-bar__thumb {
   opacity: 1;
-  transition: opacity var(--short-animation-duration) var(--default-ease);
+  transition: opacity var(--medium-animation-duration) var(--default-ease);
   /* To avoid triggering mouse event on .seek-bar */
   pointer-events: none;
   position: absolute;
@@ -39,7 +39,7 @@
   height: 15px;
   background: var(--duller-fg);
   border-radius: 3px;
-  top: 5.5px;
+  top: 4.5px;
   box-shadow: 0.5px 0.5px 2px #707072;
 }
 

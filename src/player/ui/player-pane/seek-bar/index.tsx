@@ -17,14 +17,16 @@ const OPTIMISTIC_POS_TIMEOUT_MILLISECONDS = 200;
 
 export default function SeekBar() {
   const [streamTiming, setStreamTiming] = useState<StreamTiming | null>(null);
-  const [thumbPosition, setThumbPosition] = useState<number | undefined>();
   const [optimisticPos, setOptimisticPos] = useState<number | undefined>();
   const isDraggingRef = useRef(false);
   const optimisticPosTimeoutRef = useRef<number | undefined>();
   const isMountedRef = useRef(false);
+  const clientWidthRef = useRef<number | undefined>();
+  const progressRef = useRef<HTMLProgressElement | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
+    clientWidthRef.current = progressRef.current!.getBoundingClientRect().width;
     return () => {
       isMountedRef.current = false;
     };
@@ -59,7 +61,6 @@ export default function SeekBar() {
     const clientRect = e.currentTarget.getBoundingClientRect();
     const offsetX = e.clientX - clientRect.left;
     const clampedOffset = Math.max(0, Math.min(offsetX, clientRect.width));
-    setThumbPosition(clampedOffset);
     if (
       e.currentTarget.hasPointerCapture(e.pointerId) &&
       streamTiming !== null
@@ -83,6 +84,10 @@ export default function SeekBar() {
       invoke("player_seek", { offset });
     }
   };
+  const normalizedPos =
+    streamTiming === null
+      ? undefined
+      : (optimisticPos ?? streamTiming.pos) / streamTiming.duration;
 
   return (
     <div
@@ -96,18 +101,16 @@ export default function SeekBar() {
     >
       <progress
         className="seek-bar__progress"
-        value={
-          streamTiming !== null
-            ? (optimisticPos ?? streamTiming.pos) / streamTiming.duration
-            : undefined
-        }
+        value={normalizedPos !== undefined ? normalizedPos : undefined}
+        ref={progressRef}
       />
       <div
         className="seek-bar__thumb"
         style={{
-          transform: thumbPosition
-            ? `translateX(${thumbPosition}px)`
-            : undefined,
+          transform:
+            normalizedPos !== undefined
+              ? `translateX(${normalizedPos * (clientWidthRef.current ?? 0)}px)`
+              : undefined,
         }}
       />
     </div>
