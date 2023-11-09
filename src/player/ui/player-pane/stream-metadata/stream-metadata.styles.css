@@ -6,6 +6,7 @@
   display: flex;
   color: var(--main-fg);
   padding-top: 3px;
+  margin-left: 36px;
   z-index: 5;
   overflow: hidden;
   font-size: 13px;

@@ -7,7 +7,7 @@
   align-items: center;
   padding-left: 4px;
   cursor: default;
-  transition: background-color 175ms ease;
+  transition: background-color var(--medium-animation-duration) ease;
 }
 
 .row-list-item:hover {

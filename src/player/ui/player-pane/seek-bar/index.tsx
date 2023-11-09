@@ -34,11 +34,20 @@ function padDurationComponent(value: number): string {
   return String(value).padStart(2, "0");
 }
 
+function getCurrentTimeSeconds(
+  streamTiming: StreamTiming | null,
+): number | undefined {
+  if (streamTiming === null) return undefined;
+  return (
+    (streamTiming.pos * streamTiming.duration_seconds) / streamTiming.duration
+  );
+}
+
 function getDurationString(seconds: number | undefined): string | undefined {
   if (typeof seconds === "undefined") return undefined;
-  const minutes = Math.floor(seconds / 60);
+  const minutesComponent = Math.floor(seconds / 60);
   const secondsComponent = Math.floor(seconds % 60);
-  return [minutes, secondsComponent].map(padDurationComponent).join(":");
+  return [minutesComponent, padDurationComponent(secondsComponent)].join(":");
 }
 
 function getNormalizedOffset(e: PointerEvent): number {
@@ -70,11 +79,10 @@ export default function SeekBar() {
 
   useEventListener("player://stream-timing-change", (event) => {
     const payload = StreamTimingChangePayloadSchema.parse(event.payload);
-    if (payload === null && optimisticPosition !== undefined) {
+    if (payload === null) {
       setOptimisticPosition(undefined);
     }
     setStreamTiming(payload);
-    console.log(payload?.duration, payload?.duration_seconds);
   });
 
   const handlePointerDown: PointerEventHandler = (e) => {
@@ -136,16 +144,19 @@ export default function SeekBar() {
       className={classNames("seek-bar", {
         "seek-bar--can-seek": streamTiming !== null,
       })}
-      onPointerDown={handlePointerDown}
-      onPointerEnter={handlePointerEnter}
-      onPointerMove={handlePointerMove}
-      onLostPointerCapture={handleLostPointerCapture}
-      onPointerUp={handlePointerUp}
     >
+      <div className="seek-bar__progress-text">
+        {getDurationString(getCurrentTimeSeconds(streamTiming))}
+      </div>
       <progress
         className="seek-bar__progress"
         value={normalizedPosition}
         ref={progressRef}
+        onPointerDown={handlePointerDown}
+        onPointerEnter={handlePointerEnter}
+        onPointerMove={handlePointerMove}
+        onLostPointerCapture={handleLostPointerCapture}
+        onPointerUp={handlePointerUp}
       />
       {clientWidthRef.current !== undefined ? (
         <div
@@ -163,6 +174,9 @@ export default function SeekBar() {
           transform: thumbTransform,
         }}
       />
+      <div className="seek-bar__duration-text">
+        {getDurationString(streamTiming?.duration_seconds)}
+      </div>
     </div>
   );
 }

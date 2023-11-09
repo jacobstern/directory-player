@@ -1,6 +1,7 @@
 .seek-bar {
   position: relative;
   margin: 6px 0;
+  display: flex;
 }
 
 .seek-bar--can-seek {
@@ -60,13 +61,31 @@
   color: #202020;
   font-size: 12px;
   position: absolute;
-  min-width: 35px;
+  min-width: 32px;
   display: flex;
   justify-content: center;
-  top: 28px;
+  top: 24px;
   transform: translateX(-50%);
 }
 
 .seek-bar:not(.seek-bar--can-seek:hover) .seek-bar__seek-time {
   opacity: 0;
+}
+
+.seek-bar__duration-text,
+.seek-bar__progress-text {
+  pointer-events: none;
+  font-size: 12px;
+  top: 0;
+  position: absolute;
+}
+
+.seek-bar__duration-text {
+  padding-left: 8px;
+  left: 100%;
+}
+
+.seek-bar__progress-text {
+  padding-right: 8px;
+  right: 100%;
 }
