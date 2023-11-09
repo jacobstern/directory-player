@@ -1,6 +1,7 @@
 import {
   PointerEvent,
   PointerEventHandler,
+  ReactNode,
   useEffect,
   useRef,
   useState,
@@ -55,6 +56,20 @@ function getNormalizedOffset(e: PointerEvent): number {
   const offsetX = e.clientX - clientRect.left;
   const clampedOffset = Math.max(0, Math.min(offsetX, clientRect.width));
   return clampedOffset / clientRect.width;
+}
+
+function wrapQuasiMonoChars(s: string | undefined): ReactNode {
+  if (s == null) return null;
+  return s.split("").map((c, i) => (
+    <span
+      key={i}
+      className={classNames("seek-bar__quasi-mono-char", {
+        ["seek-bar__quasi-mono-char--is-punctuation"]: c === ":",
+      })}
+    >
+      {c}
+    </span>
+  ));
 }
 
 export default function SeekBar() {
@@ -138,6 +153,7 @@ export default function SeekBar() {
   if (streamTiming !== null && hoverOffset !== undefined) {
     seekTime = getDurationString(hoverOffset * streamTiming.duration_seconds);
   }
+  const progressSeconds = getCurrentTimeSeconds(streamTiming);
 
   return (
     <div
@@ -146,7 +162,7 @@ export default function SeekBar() {
       })}
     >
       <div className="seek-bar__progress-text">
-        {getDurationString(getCurrentTimeSeconds(streamTiming))}
+        {wrapQuasiMonoChars(getDurationString(progressSeconds))}
       </div>
       <progress
         className="seek-bar__progress"
@@ -165,7 +181,7 @@ export default function SeekBar() {
             left: clientWidthRef.current * (hoverOffset ?? 0),
           }}
         >
-          {seekTime}
+          {wrapQuasiMonoChars(seekTime)}
         </div>
       ) : undefined}
       <div
@@ -175,7 +191,7 @@ export default function SeekBar() {
         }}
       />
       <div className="seek-bar__duration-text">
-        {getDurationString(streamTiming?.duration_seconds)}
+        {wrapQuasiMonoChars(getDurationString(streamTiming?.duration_seconds))}
       </div>
     </div>
   );

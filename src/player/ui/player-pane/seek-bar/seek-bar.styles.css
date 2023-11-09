@@ -40,7 +40,7 @@
   height: 15px;
   background: var(--duller-fg);
   border-radius: 3px;
-  top: -1.5px;
+  top: -2.5px;
   box-shadow: 0.5px 0.5px 2px #707072;
 }
 
@@ -78,6 +78,7 @@
   font-size: 12px;
   top: 0;
   position: absolute;
+  display: flex;
 }
 
 .seek-bar__duration-text {
@@ -88,4 +89,14 @@
 .seek-bar__progress-text {
   padding-right: 8px;
   right: 100%;
+}
+
+.seek-bar__quasi-mono-char {
+  width: 1.25ex;
+  display: flex;
+  justify-content: center;
+}
+
+.seek-bar__quasi-mono-char--is-punctuation {
+  width: auto;
 }
