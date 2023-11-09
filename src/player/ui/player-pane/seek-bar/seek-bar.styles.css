@@ -34,7 +34,7 @@
   /* To avoid triggering mouse event on .seek-bar */
   pointer-events: none;
   position: absolute;
-  left: -2.5px;
+  left: -3px;
   width: 5px;
   height: 15px;
   background: var(--duller-fg);
@@ -48,12 +48,16 @@
 }
 
 .seek-bar__seek-time {
+  pointer-events: none;
   opacity: 1;
   transition: opacity var(--medium-animation-duration) var(--default-ease);
   padding: 4px;
   box-shadow: 0.5px 0.5px 2px #202026;
   border-radius: 3px;
-  background: #50505b;
+  background: #dededf;
+  font-weight: 500;
+  foreground: var(--secondary-bg);
+  color: #202020;
   font-size: 12px;
   position: absolute;
   width: 35px;

@@ -53,7 +53,7 @@ export default function SeekBar() {
   const [optimisticPosition, setOptimisticPosition] = useState<
     number | undefined
   >();
-  const [hoverSeconds, setHoverSeconds] = useState<number | undefined>();
+  const [hoverOffset, setHoverOffset] = useState<number | undefined>();
   const isDraggingRef = useRef(false);
   const optimisticPosTimeoutRef = useRef<number | undefined>();
   const isMountedRef = useRef(false);
@@ -97,13 +97,13 @@ export default function SeekBar() {
   const handlePointerEnter: PointerEventHandler = (e) => {
     if (streamTiming !== null) {
       const normalizedOffset = getNormalizedOffset(e);
-      setHoverSeconds(normalizedOffset * streamTiming.duration);
+      setHoverOffset(normalizedOffset);
     }
   };
   const handlePointerMove: PointerEventHandler = (e) => {
     if (streamTiming !== null) {
       const normalizedOffset = getNormalizedOffset(e);
-      setHoverSeconds(normalizedOffset * streamTiming.duration_seconds);
+      setHoverOffset(normalizedOffset);
       if (e.currentTarget.hasPointerCapture(e.pointerId)) {
         setOptimisticPosition(normalizedOffset * streamTiming.duration);
       }
@@ -117,9 +117,6 @@ export default function SeekBar() {
       invoke("player_seek", { offset: Math.floor(seekPosition) });
     }
   };
-  const handlePointerOut: PointerEventHandler = () => {
-    // setHoverSeconds(undefined);
-  };
 
   const normalizedPosition = getNormalizedPosition(
     streamTiming,
@@ -129,7 +126,10 @@ export default function SeekBar() {
     normalizedPosition && clientWidthRef.current
       ? `translateX(${normalizedPosition * clientWidthRef.current}px)`
       : undefined;
-  const seekTime = getDurationString(hoverSeconds);
+  let seekTime: string | undefined;
+  if (streamTiming !== null && hoverOffset !== undefined) {
+    seekTime = getDurationString(hoverOffset * streamTiming.duration_seconds);
+  }
 
   return (
     <div
@@ -141,27 +141,22 @@ export default function SeekBar() {
       onPointerMove={handlePointerMove}
       onLostPointerCapture={handleLostPointerCapture}
       onPointerUp={handlePointerUp}
-      onPointerOut={handlePointerOut}
     >
       <progress
         className="seek-bar__progress"
         value={normalizedPosition}
         ref={progressRef}
       />
-      {seekTime !== undefined &&
-        streamTiming !== null &&
-        clientWidthRef.current && (
-          <div
-            className="seek-bar__seek-time"
-            style={{
-              left:
-                (clientWidthRef.current * (hoverSeconds ?? 0)) /
-                streamTiming.duration_seconds,
-            }}
-          >
-            {seekTime}
-          </div>
-        )}
+      {clientWidthRef.current !== undefined ? (
+        <div
+          className="seek-bar__seek-time"
+          style={{
+            left: clientWidthRef.current * (hoverOffset ?? 0),
+          }}
+        >
+          {seekTime}
+        </div>
+      ) : undefined}
       <div
         className="seek-bar__thumb"
         style={{
