@@ -1,6 +1,6 @@
 .seek-bar {
   position: relative;
-  padding: 6px 0;
+  margin: 6px 0;
 }
 
 .seek-bar--can-seek {
@@ -39,7 +39,7 @@
   height: 15px;
   background: var(--duller-fg);
   border-radius: 3px;
-  top: 4.5px;
+  top: -1.5px;
   box-shadow: 0.5px 0.5px 2px #707072;
 }
 
@@ -55,15 +55,15 @@
   box-shadow: 0.5px 0.5px 2px #202026;
   border-radius: 3px;
   background: #dededf;
-  font-weight: 500;
+  font-weight: 600;
   foreground: var(--secondary-bg);
   color: #202020;
   font-size: 12px;
   position: absolute;
-  width: 35px;
+  min-width: 35px;
   display: flex;
   justify-content: center;
-  top: 22px;
+  top: 28px;
   transform: translateX(-50%);
 }
 
