@@ -1,4 +1,10 @@
-import { PointerEventHandler, useEffect, useRef, useState } from "react";
+import {
+  PointerEvent,
+  PointerEventHandler,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { StreamTiming } from "../../../types";
 import classNames from "classnames";
@@ -15,9 +21,39 @@ import useEventListener from "../../../../tauri/hooks/use-event-listener";
  */
 const OPTIMISTIC_POS_TIMEOUT_MILLISECONDS = 200;
 
+function getNormalizedPosition(
+  streamTiming: StreamTiming | null,
+  optimisticPosition: number | undefined,
+): number | undefined {
+  if (streamTiming === null) return undefined;
+  const position = optimisticPosition ?? streamTiming.pos;
+  return position / streamTiming.duration;
+}
+
+function padDurationComponent(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function getDurationString(seconds: number | undefined): string | undefined {
+  if (typeof seconds === "undefined") return undefined;
+  const minutes = Math.floor(seconds / 60);
+  const secondsComponent = Math.floor(seconds % 60);
+  return [minutes, secondsComponent].map(padDurationComponent).join(":");
+}
+
+function getNormalizedOffset(e: PointerEvent): number {
+  const clientRect = e.currentTarget.getBoundingClientRect();
+  const offsetX = e.clientX - clientRect.left;
+  const clampedOffset = Math.max(0, Math.min(offsetX, clientRect.width));
+  return clampedOffset / clientRect.width;
+}
+
 export default function SeekBar() {
   const [streamTiming, setStreamTiming] = useState<StreamTiming | null>(null);
-  const [optimisticPos, setOptimisticPos] = useState<number | undefined>();
+  const [optimisticPosition, setOptimisticPosition] = useState<
+    number | undefined
+  >();
+  const [hoverSeconds, setHoverSeconds] = useState<number | undefined>();
   const isDraggingRef = useRef(false);
   const optimisticPosTimeoutRef = useRef<number | undefined>();
   const isMountedRef = useRef(false);
@@ -34,10 +70,11 @@ export default function SeekBar() {
 
   useEventListener("player://stream-timing-change", (event) => {
     const payload = StreamTimingChangePayloadSchema.parse(event.payload);
-    if (payload === null && optimisticPos !== undefined) {
-      setOptimisticPos(undefined);
+    if (payload === null && optimisticPosition !== undefined) {
+      setOptimisticPosition(undefined);
     }
     setStreamTiming(payload);
+    console.log(payload?.duration, payload?.duration_seconds);
   });
 
   const handlePointerDown: PointerEventHandler = (e) => {
@@ -46,48 +83,53 @@ export default function SeekBar() {
   };
   const handleLostPointerCapture: PointerEventHandler = () => {
     isDraggingRef.current = false;
-    if (optimisticPos !== undefined) {
+    if (optimisticPosition !== undefined) {
       if (optimisticPosTimeoutRef.current !== undefined) {
         clearTimeout(optimisticPosTimeoutRef.current);
       }
       optimisticPosTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {
-          setOptimisticPos(undefined);
+          setOptimisticPosition(undefined);
         }
       }, OPTIMISTIC_POS_TIMEOUT_MILLISECONDS);
     }
   };
+  const handlePointerEnter: PointerEventHandler = (e) => {
+    if (streamTiming !== null) {
+      const normalizedOffset = getNormalizedOffset(e);
+      setHoverSeconds(normalizedOffset * streamTiming.duration);
+    }
+  };
   const handlePointerMove: PointerEventHandler = (e) => {
-    const clientRect = e.currentTarget.getBoundingClientRect();
-    const offsetX = e.clientX - clientRect.left;
-    const clampedOffset = Math.max(0, Math.min(offsetX, clientRect.width));
-    if (
-      e.currentTarget.hasPointerCapture(e.pointerId) &&
-      streamTiming !== null
-    ) {
-      setOptimisticPos(
-        (clampedOffset * streamTiming.duration) / clientRect.width,
-      );
+    if (streamTiming !== null) {
+      const normalizedOffset = getNormalizedOffset(e);
+      setHoverSeconds(normalizedOffset * streamTiming.duration_seconds);
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        setOptimisticPosition(normalizedOffset * streamTiming.duration);
+      }
     }
   };
   const handlePointerUp: PointerEventHandler = (e) => {
     e.currentTarget.releasePointerCapture(e.pointerId);
     if (streamTiming !== null) {
-      const clientRect = e.currentTarget.getBoundingClientRect();
-      const offsetX = e.clientX - clientRect.left;
-      const normalizedPos = Math.max(
-        0,
-        Math.min(1, offsetX / clientRect.width),
-      );
-      const offset = Math.floor(normalizedPos * streamTiming.duration);
-      setOptimisticPos(offset);
-      invoke("player_seek", { offset });
+      const seekPosition = getNormalizedOffset(e) * streamTiming.duration;
+      setOptimisticPosition(seekPosition);
+      invoke("player_seek", { offset: Math.floor(seekPosition) });
     }
   };
-  const normalizedPos =
-    streamTiming === null
-      ? undefined
-      : (optimisticPos ?? streamTiming.pos) / streamTiming.duration;
+  const handlePointerOut: PointerEventHandler = () => {
+    // setHoverSeconds(undefined);
+  };
+
+  const normalizedPosition = getNormalizedPosition(
+    streamTiming,
+    optimisticPosition,
+  );
+  const thumbTransform =
+    normalizedPosition && clientWidthRef.current
+      ? `translateX(${normalizedPosition * clientWidthRef.current}px)`
+      : undefined;
+  const seekTime = getDurationString(hoverSeconds);
 
   return (
     <div
@@ -95,22 +137,35 @@ export default function SeekBar() {
         "seek-bar--can-seek": streamTiming !== null,
       })}
       onPointerDown={handlePointerDown}
+      onPointerEnter={handlePointerEnter}
       onPointerMove={handlePointerMove}
       onLostPointerCapture={handleLostPointerCapture}
       onPointerUp={handlePointerUp}
+      onPointerOut={handlePointerOut}
     >
       <progress
         className="seek-bar__progress"
-        value={normalizedPos !== undefined ? normalizedPos : undefined}
+        value={normalizedPosition}
         ref={progressRef}
       />
+      {seekTime !== undefined &&
+        streamTiming !== null &&
+        clientWidthRef.current && (
+          <div
+            className="seek-bar__seek-time"
+            style={{
+              left:
+                (clientWidthRef.current * (hoverSeconds ?? 0)) /
+                streamTiming.duration_seconds,
+            }}
+          >
+            {seekTime}
+          </div>
+        )}
       <div
         className="seek-bar__thumb"
         style={{
-          transform:
-            normalizedPos !== undefined
-              ? `translateX(${normalizedPos * (clientWidthRef.current ?? 0)}px)`
-              : undefined,
+          transform: thumbTransform,
         }}
       />
     </div>

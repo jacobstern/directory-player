@@ -3,7 +3,6 @@
   user-select: none;
   pointer-events: none;
   opacity: 0;
-  /* transition: opacity var(--short-animation-duration) var(--default-ease); */
   display: flex;
   color: var(--main-fg);
   padding-top: 3px;

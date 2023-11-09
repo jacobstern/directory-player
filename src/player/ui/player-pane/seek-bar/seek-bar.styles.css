@@ -46,3 +46,23 @@
 .seek-bar:not(.seek-bar--can-seek:hover) .seek-bar__thumb {
   opacity: 0;
 }
+
+.seek-bar__seek-time {
+  opacity: 1;
+  transition: opacity var(--medium-animation-duration) var(--default-ease);
+  padding: 4px;
+  box-shadow: 0.5px 0.5px 2px #202026;
+  border-radius: 3px;
+  background: #50505b;
+  font-size: 12px;
+  position: absolute;
+  width: 35px;
+  display: flex;
+  justify-content: center;
+  top: 22px;
+  transform: translateX(-50%);
+}
+
+.seek-bar:not(.seek-bar--can-seek:hover) .seek-bar__seek-time {
+  opacity: 0;
+}
