@@ -12,7 +12,7 @@ export default function StopButton() {
     <PlaybackButton
       disabled={playbackState === "Stopped"}
       title="Stop"
-      icon="Stop"
+      icon="stop"
       onClick={handleClick}
     />
   );

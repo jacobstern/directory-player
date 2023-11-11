@@ -15,7 +15,7 @@
   align-items: center;
   font-size: 16px;
   border-radius: 4px;
-  color: var(--duller-fg);
+  color: var(--chrome-fg);
 }
 
 .playback-button:not(:disabled) {
@@ -28,4 +28,8 @@
 
 .playback-button:disabled {
   opacity: 0.55;
+}
+
+.playback-button--selected {
+  color: var(--chrome-selected-fg);
 }

@@ -3,16 +3,18 @@ use std::{path::Path, sync::mpsc, thread, time::Duration};
 use base64::{engine::general_purpose, Engine};
 use log::{error, info, warn};
 use rtrb::RingBuffer;
+use serde::{Deserialize, Serialize};
 use symphonia::core::{
     meta::{StandardTagKey, StandardVisualKey, Value},
     units::{Time, TimeBase},
 };
 
-use crate::player::{file_stream::FileStream, PlaybackFile, StreamMetadata};
+use crate::player::{file_stream::FileStream, queue::Queue, PlaybackFile, StreamMetadata};
 
 use super::{
-    errors::FileStreamOpenError, output::Output, ManagerToProcessMsg, PlaybackState, PlayerEvent,
-    ProcessToManagerMsg, StartPlaybackState, StreamMetadataVisual, StreamTiming,
+    errors::FileStreamOpenError, output::Output, queue::GoNextMode, ManagerToProcessMsg,
+    PlaybackState, PlayerEvent, ProcessToManagerMsg, StartPlaybackState, StreamMetadataVisual,
+    StreamTiming,
 };
 
 const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
@@ -30,58 +32,7 @@ pub enum ManagerCommand {
     OpenFileStream(u64, String, FileStream),
     SkipForward,
     SkipBack,
-}
-
-// TODO: Move this to a separate module
-#[derive(Clone)]
-struct Queue<T> {
-    elements: Vec<T>,
-    index: usize,
-}
-
-impl<T> Queue<T> {
-    pub fn from_iter<I: IntoIterator<Item = T>>(elements: I, start_index: usize) -> Option<Self> {
-        let elements = Vec::from_iter(elements.into_iter());
-        if elements.len() <= start_index {
-            None
-        } else {
-            Some(Queue {
-                elements,
-                index: start_index,
-            })
-        }
-    }
-
-    pub fn has_previous(&self) -> bool {
-        self.index > 0
-    }
-
-    pub fn current(&self) -> &T {
-        &self.elements[self.index]
-    }
-
-    // TODO: These should probably just return a Result instead
-    pub fn go_next(self) -> Option<Queue<T>> {
-        if self.index + 1 < self.elements.len() {
-            Some(Queue {
-                index: self.index + 1,
-                elements: self.elements,
-            })
-        } else {
-            None
-        }
-    }
-
-    pub fn go_previous_clamped(self) -> Queue<T> {
-        if self.has_previous() {
-            Queue {
-                index: self.index - 1,
-                elements: self.elements,
-            }
-        } else {
-            self
-        }
-    }
+    SetShuffle(ShuffleMode),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -110,6 +61,12 @@ fn gain_for_volume(volume: f64) -> f32 {
     (amp as f32).min(1.0)
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub enum ShuffleMode {
+    NotEnabled,
+    Enabled,
+}
+
 pub struct PlaybackManager {
     output: Output,
     to_process_tx: rtrb::Producer<ManagerToProcessMsg>,
@@ -121,6 +78,7 @@ pub struct PlaybackManager {
     next_playback_id: u64,
     playback_state: PlaybackState,
     stream_timing: Option<StreamTimingInternal>,
+    shuffle_mode: ShuffleMode,
 }
 
 fn poll_process_to_gui_message(
@@ -184,6 +142,7 @@ impl PlaybackManager {
             next_playback_id: 0,
             playback_state: PlaybackState::Stopped,
             stream_timing: None,
+            shuffle_mode: ShuffleMode::Enabled,
         }
     }
 
@@ -252,12 +211,31 @@ impl PlaybackManager {
                 ManagerCommand::SkipBack => {
                     self.skip_back_impl();
                 }
+                ManagerCommand::SetShuffle(shuffle_mode) => {
+                    self.set_shuffle_mode_impl(shuffle_mode);
+                }
             }
         }
     }
 
+    fn set_shuffle_mode_impl(&mut self, shuffle_mode: ShuffleMode) -> () {
+        if shuffle_mode == self.shuffle_mode {
+            return;
+        }
+        if shuffle_mode == ShuffleMode::Enabled {
+            self.queue = self.queue.take().map(|queue| queue.to_shuffled());
+        } else {
+            self.queue = self.queue.take().map(|queue| queue.to_unshuffled());
+        }
+        self.shuffle_mode = shuffle_mode;
+    }
+
     fn start_playback_impl(&mut self, file_paths: Vec<String>, start_index: usize) {
-        self.queue = Queue::from_iter(file_paths, start_index);
+        self.queue = if self.shuffle_mode == ShuffleMode::Enabled {
+            Queue::from_iter_shuffled(file_paths, start_index)
+        } else {
+            Queue::from_iter(file_paths, start_index)
+        };
         if let Some(queue) = self.queue.as_ref() {
             self.start_playback(queue.current().to_owned());
         }
@@ -362,11 +340,13 @@ impl PlaybackManager {
         });
 
         if is_early_in_stream && has_previous {
-            self.queue = self.queue.take().map(|queue| {
-                let previous = queue.go_previous_clamped();
-                self.start_playback(previous.current().to_owned());
-                previous
-            });
+            let previous = self
+                .queue
+                .as_mut()
+                .map(|queue| queue.go_previous_clamped().to_owned());
+            if let Some(path) = previous {
+                self.start_playback(path);
+            }
         } else if self.stream_timing.as_ref().map_or(0, |timing| timing.pos) > 0 {
             // TODO: Technically, we can have a stream position without the timing data structure
             // but this is not currently done since the UI won't make use of it. Is it worth
@@ -411,11 +391,16 @@ impl PlaybackManager {
     }
 
     fn play_next(&mut self) {
-        self.queue = self.queue.take().and_then(|queue| queue.go_next());
-        if let Some(queue) = self.queue.as_ref() {
-            self.start_playback(queue.current().to_owned());
+        let next = self
+            .queue
+            .as_mut()
+            .and_then(|queue| queue.go_next(GoNextMode::Default))
+            .map(|path| path.to_owned());
+        if let Some(path) = next {
+            self.start_playback(path.to_owned());
         } else {
             self.stop_playback();
+            self.queue = None;
         }
     }
 

@@ -13,7 +13,7 @@ export default function SkipForwardButton() {
     <PlaybackButton
       disabled={disabled}
       title="Skip Forward"
-      icon="SkipForward"
+      icon="skip-forward"
       onClick={handleClick}
     />
   );

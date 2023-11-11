@@ -17,7 +17,7 @@ export default function PlayPauseButton() {
     <PlaybackButton
       disabled={disabled}
       title={playbackState === "Playing" ? "Pause" : "Play"}
-      icon={playbackState === "Playing" ? "Pause" : "Play"}
+      icon={playbackState === "Playing" ? "pause" : "play"}
       onClick={handleClick}
     />
   );

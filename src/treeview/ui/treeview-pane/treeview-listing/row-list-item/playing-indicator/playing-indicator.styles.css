@@ -1,7 +1,7 @@
 .playing-indicator {
   width: 20px;
   font-size: 12px;
-  color: var(--duller-fg);
+  color: var(--chrome-fg);
   animation: playing-indicator 3s infinite ease;
 
   @media (prefers-reduced-motion) {

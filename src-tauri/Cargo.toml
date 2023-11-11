@@ -23,6 +23,7 @@ rtrb = "0.2.3"
 symphonia = { version = "0.5.3", features = ["mp3"] }
 log = "0.4.20"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+rand = "0.8.5"
 rubato = "0.14.1"
 tokio = "1.32.0"
 

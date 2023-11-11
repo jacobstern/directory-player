@@ -25,7 +25,7 @@
 }
 
 .seek-bar__progress::-webkit-progress-value {
-  background-color: var(--duller-fg);
+  background-color: var(--chrome-fg);
   border-radius: 2.5px;
 }
 
@@ -38,7 +38,7 @@
   left: -3px;
   width: 5px;
   height: 15px;
-  background: var(--duller-fg);
+  background: var(--chrome-fg);
   border-radius: 3px;
   top: -2.5px;
   box-shadow: 0.5px 0.5px 2px #707072;

@@ -9,7 +9,7 @@
   -webkit-appearance: none;
   width: 5px;
   height: 15px;
-  background: var(--duller-fg);
+  background: var(--chrome-fg);
   border-radius: 3px;
   margin-top: -4.5px;
   box-shadow: 0.5px 0.5px 2px #707072;

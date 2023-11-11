@@ -62,6 +62,11 @@ pub struct FileStream {
     metadata: Option<MetadataRevision>,
 }
 
+pub struct FileStreamMetadata {
+    time_base: Option<TimeBase>,
+    preferred_metadata: Option<MetadataRevision>,
+}
+
 impl FileStream {
     pub fn open<P>(file_path: P, target_sample_rate: u32) -> Result<Self, FileStreamOpenError>
     where

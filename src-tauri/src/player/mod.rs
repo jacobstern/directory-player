@@ -15,6 +15,9 @@ mod file_stream;
 mod manager;
 mod output;
 mod process;
+mod queue;
+
+pub use manager::ShuffleMode;
 
 pub enum StartPlaybackState {
     Playing,
@@ -142,5 +145,11 @@ impl Player {
         self.command_tx
             .send(ManagerCommand::Stop)
             .unwrap_or_else(|_| warn!("Failed to send stop command to the manager"));
+    }
+
+    pub fn set_shuffle_mode(&mut self, shuffle_mode: ShuffleMode) {
+        self.command_tx
+            .send(ManagerCommand::SetShuffle(shuffle_mode))
+            .unwrap_or_else(|_| warn!("Failed to send shuffle mode command to the manager"));
     }
 }
