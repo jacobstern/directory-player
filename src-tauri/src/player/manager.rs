@@ -33,6 +33,7 @@ pub enum ManagerCommand {
     SkipForward,
     SkipBack,
     SetShuffle(ShuffleMode),
+    SetRepeat(RepeatMode),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -67,6 +68,13 @@ pub enum ShuffleMode {
     Enabled,
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+pub enum RepeatMode {
+    None,
+    RepeatAll,
+    RepeatOne,
+}
+
 pub struct PlaybackManager {
     output: Output,
     to_process_tx: rtrb::Producer<ManagerToProcessMsg>,
@@ -79,6 +87,7 @@ pub struct PlaybackManager {
     playback_state: PlaybackState,
     stream_timing: Option<StreamTimingInternal>,
     shuffle_mode: ShuffleMode,
+    repeat_mode: RepeatMode,
 }
 
 fn poll_process_to_gui_message(
@@ -142,7 +151,8 @@ impl PlaybackManager {
             next_playback_id: 0,
             playback_state: PlaybackState::Stopped,
             stream_timing: None,
-            shuffle_mode: ShuffleMode::Enabled,
+            shuffle_mode: ShuffleMode::NotEnabled,
+            repeat_mode: RepeatMode::None,
         }
     }
 
@@ -214,11 +224,14 @@ impl PlaybackManager {
                 ManagerCommand::SetShuffle(shuffle_mode) => {
                     self.set_shuffle_mode_impl(shuffle_mode);
                 }
+                ManagerCommand::SetRepeat(repeat_mode) => {
+                    self.set_repeat_impl(repeat_mode);
+                }
             }
         }
     }
 
-    fn set_shuffle_mode_impl(&mut self, shuffle_mode: ShuffleMode) -> () {
+    fn set_shuffle_mode_impl(&mut self, shuffle_mode: ShuffleMode) {
         if shuffle_mode == self.shuffle_mode {
             return;
         }
@@ -228,6 +241,10 @@ impl PlaybackManager {
             self.queue = self.queue.take().map(|queue| queue.to_unshuffled());
         }
         self.shuffle_mode = shuffle_mode;
+    }
+
+    fn set_repeat_impl(&mut self, repeat_mode: RepeatMode) {
+        self.repeat_mode = repeat_mode;
     }
 
     fn start_playback_impl(&mut self, file_paths: Vec<String>, start_index: usize) {
@@ -391,10 +408,22 @@ impl PlaybackManager {
     }
 
     fn play_next(&mut self) {
+        if self.repeat_mode == RepeatMode::RepeatOne {
+            if let Some(path) = self.queue.as_ref().map(|queue| queue.current().to_owned()) {
+                self.start_playback(path);
+            }
+            return;
+        }
         let next = self
             .queue
             .as_mut()
-            .and_then(|queue| queue.go_next(GoNextMode::Default))
+            .and_then(|queue| {
+                queue.go_next(if self.repeat_mode == RepeatMode::RepeatAll {
+                    GoNextMode::RepeatAll
+                } else {
+                    GoNextMode::Default
+                })
+            })
             .map(|path| path.to_owned());
         if let Some(path) = next {
             self.start_playback(path.to_owned());

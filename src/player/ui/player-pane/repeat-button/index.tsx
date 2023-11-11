@@ -20,7 +20,8 @@ function nextRepeatMode(repeatMode: RepeatMode): RepeatMode {
 export default function RepeatButton() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("None");
   const desiredRepeatMode = nextRepeatMode(repeatMode);
-  const handleClick = () => {
+  const handleClick = async () => {
+    await invoke("player_set_repeat_mode", { repeatMode: desiredRepeatMode });
     setRepeatMode(desiredRepeatMode);
   };
 

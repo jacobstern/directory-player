@@ -1,6 +1,6 @@
 use std::thread;
 
-use log::warn;
+use log::error;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 
@@ -17,6 +17,7 @@ mod output;
 mod process;
 mod queue;
 
+pub use manager::RepeatMode;
 pub use manager::ShuffleMode;
 
 pub enum StartPlaybackState {
@@ -101,55 +102,61 @@ impl Player {
                 start_index,
             ))
             .unwrap_or_else(|_| {
-                warn!("Failed to send start playback command to the manager");
+                error!("Failed to send start playback command to the manager");
             });
     }
 
     pub fn pause(&mut self) {
         self.command_tx
             .send(ManagerCommand::Pause)
-            .unwrap_or_else(|_| warn!("Failed to send pause command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send pause command to the manager"));
     }
 
     pub fn play(&mut self) {
         self.command_tx
             .send(ManagerCommand::Resume)
-            .unwrap_or_else(|_| warn!("Failed to send resume command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send resume command to the manager"));
     }
 
     pub fn set_volume(&mut self, volume: f64) {
         self.command_tx
             .send(ManagerCommand::SetVolume(volume))
-            .unwrap_or_else(|_| warn!("Failed to send volume command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send volume command to the manager"));
     }
 
     pub fn seek(&mut self, offset: usize) {
         self.command_tx
             .send(ManagerCommand::SeekTo(offset))
-            .unwrap_or_else(|_| warn!("Failed to send seek command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send seek command to the manager"));
     }
 
     pub fn skip_forward(&mut self) {
         self.command_tx
             .send(ManagerCommand::SkipForward)
-            .unwrap_or_else(|_| warn!("Failed to send skip forward command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send skip forward command to the manager"));
     }
 
     pub fn skip_back(&mut self) {
         self.command_tx
             .send(ManagerCommand::SkipBack)
-            .unwrap_or_else(|_| warn!("Failed to send skip back command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send skip back command to the manager"));
     }
 
     pub fn stop(&mut self) {
         self.command_tx
             .send(ManagerCommand::Stop)
-            .unwrap_or_else(|_| warn!("Failed to send stop command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send stop command to the manager"));
     }
 
     pub fn set_shuffle_mode(&mut self, shuffle_mode: ShuffleMode) {
         self.command_tx
             .send(ManagerCommand::SetShuffle(shuffle_mode))
-            .unwrap_or_else(|_| warn!("Failed to send shuffle mode command to the manager"));
+            .unwrap_or_else(|_| error!("Failed to send shuffle mode command to the manager"));
+    }
+
+    pub fn set_repeat_mode(&mut self, repeat_mode: RepeatMode) {
+        self.command_tx
+            .send(ManagerCommand::SetRepeat(repeat_mode))
+            .unwrap_or_else(|_| error!("Failed to send repeat command to the manager"))
     }
 }

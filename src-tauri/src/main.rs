@@ -4,7 +4,7 @@
 mod player;
 
 use log::warn;
-use player::{Player, PlayerEvent, ShuffleMode};
+use player::{Player, PlayerEvent, RepeatMode, ShuffleMode};
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{
@@ -68,6 +68,11 @@ fn player_set_shuffle_mode(player_state: tauri::State<PlayerState>, shuffle_mode
         .lock()
         .unwrap()
         .set_shuffle_mode(shuffle_mode);
+}
+
+#[tauri::command]
+fn player_set_repeat_mode(player_state: tauri::State<PlayerState>, repeat_mode: RepeatMode) {
+    player_state.0.lock().unwrap().set_repeat_mode(repeat_mode);
 }
 
 #[tauri::command]
@@ -145,7 +150,8 @@ fn main() {
             player_seek,
             player_skip_forward,
             player_skip_back,
-            player_set_shuffle_mode
+            player_set_shuffle_mode,
+            player_set_repeat_mode
         ])
         .setup(|app| {
             async_runtime::spawn(poll_player_events(app.handle(), player_event_rx));
