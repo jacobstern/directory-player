@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api";
 
 import PlaybackButton from "../../../shared-ui/playback-button";
 import { useState } from "react";
-import usePlaybackState from "../../../hooks/use-playback-state";
 
 export default function ShuffleButton() {
   const [isShuffleEnabled, setIsShuffleEnabled] = useState(false);

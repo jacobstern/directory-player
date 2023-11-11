@@ -9,7 +9,9 @@ export type PlaybackButtonIcon =
   | "skip-back"
   | "skip-forward"
   | "stop"
-  | "shuffle";
+  | "shuffle"
+  | "repeat"
+  | "repeat-one";
 
 export interface PlaybackButtonProps {
   icon: PlaybackButtonIcon;
@@ -71,6 +73,20 @@ export default function PlaybackButton({
         </svg>
       );
       break;
+    case "repeat":
+    case "repeat-one":
+      iconNode = (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          height="1em"
+          viewBox="0 0 512 512"
+          fill="currentColor"
+        >
+          {/*! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2023 Fonticons, Inc. */}
+          <path d="M0 224c0 17.7 14.3 32 32 32s32-14.3 32-32c0-53 43-96 96-96H320v32c0 12.9 7.8 24.6 19.8 29.6s25.7 2.2 34.9-6.9l64-64c12.5-12.5 12.5-32.8 0-45.3l-64-64c-9.2-9.2-22.9-11.9-34.9-6.9S320 19.1 320 32V64H160C71.6 64 0 135.6 0 224zm512 64c0-17.7-14.3-32-32-32s-32 14.3-32 32c0 53-43 96-96 96H192V352c0-12.9-7.8-24.6-19.8-29.6s-25.7-2.2-34.9 6.9l-64 64c-12.5 12.5-12.5 32.8 0 45.3l64 64c9.2 9.2 22.9 11.9 34.9 6.9s19.8-16.6 19.8-29.6V448H352c88.4 0 160-71.6 160-160z" />
+        </svg>
+      );
+      break;
     case "stop":
       iconNode = (
         <svg
@@ -122,6 +138,18 @@ export default function PlaybackButton({
       })}
     >
       {iconNode}
+      {icon === "repeat-one" && (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          height="1em"
+          viewBox="0 0 256 512"
+          fill="currentColor"
+          className="playback-button__one"
+        >
+          {/*! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2023 Fonticons, Inc. */}
+          <path d="M160 64c0-11.8-6.5-22.6-16.9-28.2s-23-5-32.8 1.6l-96 64C-.5 111.2-4.4 131 5.4 145.8s29.7 18.7 44.4 8.9L96 123.8V416H32c-17.7 0-32 14.3-32 32s14.3 32 32 32h96 96c17.7 0 32-14.3 32-32s-14.3-32-32-32H160V64z" />
+        </svg>
+      )}
     </button>
   );
 }

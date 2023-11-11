@@ -5,9 +5,9 @@ import SkipForwardButton from "./skip-forward-button";
 import VolumeSlider from "./volume-slider";
 
 import "./player-pane.styles.css";
-import StopButton from "./stop-button";
 import StreamMetadata from "./stream-metadata";
 import ShuffleButton from "./shuffle-button";
+import RepeatButton from "./repeat-button";
 
 export default function PlayerPane() {
   return (
@@ -17,8 +17,8 @@ export default function PlayerPane() {
           <ShuffleButton />
           <SkipBackButton />
           <PlayPauseButton />
-          <StopButton />
           <SkipForwardButton />
+          <RepeatButton />
           <VolumeSlider />
         </div>
         <SeekBar />
