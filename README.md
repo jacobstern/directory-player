@@ -1,3 +1,3 @@
 # Watch this space!
 
-![Screenshot 2023-09-30 at 5 41 52 PM](https://github.com/jacobstern/directory-player/assets/3099891/c7849bd6-22d5-4abf-ba74-0b17d1da1a65)
+<img width="912" alt="Screenshot 2023-11-11 at 1 26 42 PM" src="https://github.com/jacobstern/directory-player/assets/3099891/753459fe-e3c4-49b3-99ba-033f99e3bffd">
