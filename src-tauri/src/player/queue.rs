@@ -1,7 +1,6 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-// TODO: Move this to a separate module
 #[derive(Clone)]
 pub struct Queue<T> {
     elements: Vec<T>,

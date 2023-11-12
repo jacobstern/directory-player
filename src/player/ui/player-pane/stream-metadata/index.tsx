@@ -2,7 +2,7 @@ import { Event } from "@tauri-apps/api/event";
 import "./stream-metadata.styles.css";
 import { useMemo, useState } from "react";
 import { StreamMetadataPayloadSchema } from "../../../schemas";
-import type { StreamMetadata as StreamMetadataType } from "../../../types";
+import type { StreamMetadata } from "../../../types";
 import useEventListener from "../../../../tauri/hooks/use-event-listener";
 import debounce from "../../../../utils/debounce";
 import classNames from "classnames";
@@ -10,8 +10,9 @@ import classNames from "classnames";
 const EVENT_LISTENER_DEBOUNCE_MILLIS = 100;
 
 export default function StreamMetadata() {
-  const [latestMetadata, setLatestMetadata] =
-    useState<StreamMetadataType | null>(null);
+  const [latestMetadata, setLatestMetadata] = useState<StreamMetadata | null>(
+    null,
+  );
   const [hasMetadata, setHasMetadata] = useState(false);
   const debouncedEventListener = useMemo(
     () =>

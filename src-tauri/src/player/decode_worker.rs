@@ -73,7 +73,6 @@ pub enum FileStreamToDecodeWorkerMessage {
 pub struct DecodeWorker {
     message_producer: rtrb::Producer<DecodeWorkerToFileStreamMessage>,
     message_consumer: rtrb::Consumer<FileStreamToDecodeWorkerMessage>,
-    // TODO: Needs to be SampleBuffer?
     input_buffer: Vec<Vec<f32>>,
     output_buffer: Vec<Vec<f32>>,
     reader: Box<dyn FormatReader>,

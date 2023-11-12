@@ -43,7 +43,6 @@ impl Process {
     }
 
     pub fn process(&mut self, data: &mut [f32]) {
-        // TODO: Make sure the various ring buffers are not backed up
         if self.fatal_error {
             silence(data);
             return;

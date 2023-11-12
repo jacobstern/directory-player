@@ -287,43 +287,50 @@ impl PlaybackManager {
             }
         }
 
-        let meta: Option<StreamMetadata> = file_stream.metadata().map(|metadata| {
-            let tags = metadata.tags();
-            let track_title_tag = tags
-                .into_iter()
-                .find(|tag| tag.std_key == Some(StandardTagKey::TrackTitle));
-            let track_title = track_title_tag.as_ref().and_then(|tag| {
-                if let Value::String(s) = tag.value.clone() {
-                    Some(s)
-                } else {
-                    None
+        let meta: StreamMetadata = file_stream
+            .metadata()
+            .map(|metadata| {
+                let tags = metadata.tags();
+                let track_title_tag = tags
+                    .into_iter()
+                    .find(|tag| tag.std_key == Some(StandardTagKey::TrackTitle));
+                let track_title = track_title_tag.as_ref().and_then(|tag| {
+                    if let Value::String(s) = tag.value.clone() {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                });
+                let artist_tag = tags
+                    .into_iter()
+                    .find(|tag| tag.std_key == Some(StandardTagKey::Artist));
+                let artist = artist_tag.as_ref().and_then(|tag| {
+                    if let Value::String(s) = tag.value.clone() {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                });
+                let album_cover_visual = metadata
+                    .visuals()
+                    .into_iter()
+                    .find(|visual| visual.usage == Some(StandardVisualKey::FrontCover));
+                let album_cover = album_cover_visual.map(|visual| StreamMetadataVisual {
+                    media_type: visual.media_type.to_owned(),
+                    data_base64: general_purpose::URL_SAFE.encode(visual.data.as_ref()),
+                });
+                StreamMetadata {
+                    track_title,
+                    artist,
+                    album_cover,
                 }
+            })
+            .unwrap_or(StreamMetadata {
+                track_title: None,
+                artist: None,
+                album_cover: None,
             });
-            let artist_tag = tags
-                .into_iter()
-                .find(|tag| tag.std_key == Some(StandardTagKey::Artist));
-            let artist = artist_tag.as_ref().and_then(|tag| {
-                if let Value::String(s) = tag.value.clone() {
-                    Some(s)
-                } else {
-                    None
-                }
-            });
-            let album_cover_visual = metadata
-                .visuals()
-                .into_iter()
-                .find(|visual| visual.usage == Some(StandardVisualKey::FrontCover));
-            let album_cover = album_cover_visual.map(|visual| StreamMetadataVisual {
-                media_type: visual.media_type.to_owned(),
-                data_base64: general_purpose::URL_SAFE.encode(visual.data.as_ref()),
-            });
-            StreamMetadata {
-                track_title,
-                artist,
-                album_cover,
-            }
-        });
-        self.try_send_event(PlayerEvent::StreamMetadataChange(meta));
+        self.try_send_event(PlayerEvent::StreamMetadataChange(Some(meta)));
 
         assert_ne!(self.playback_state, PlaybackState::Stopped);
 
@@ -426,7 +433,7 @@ impl PlaybackManager {
             })
             .map(|path| path.to_owned());
         if let Some(path) = next {
-            self.start_playback(path.to_owned());
+            self.start_playback(path);
         } else {
             self.stop_playback();
             self.queue = None;
@@ -449,9 +456,6 @@ impl PlaybackManager {
     }
 
     fn start_playback(&mut self, path: String) {
-        // TODO: Consider revisiting this. To avoid significant complexity, we don't continue to
-        // play the current stream if we're starting a new one. This is a little confusing since we
-        // do some other things optimistically, like setting the playback state to Playing here.
         self.to_process_tx
             .push(ManagerToProcessMsg::Stop)
             .unwrap_or_else(|_| {
