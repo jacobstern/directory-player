@@ -52,9 +52,9 @@
   pointer-events: none;
   opacity: 1;
   transition: opacity var(--medium-animation-duration) var(--default-ease);
-  padding: 4px;
+  padding: 3px;
   box-shadow: 0.5px 0.5px 2px #202026;
-  border-radius: 3px;
+  border-radius: 2px;
   background: #dededf;
   font-weight: 600;
   foreground: var(--secondary-bg);
@@ -76,7 +76,7 @@
 .seek-bar__progress-text {
   pointer-events: none;
   font-size: 12px;
-  top: 0;
+  top: -1px;
   position: absolute;
   display: flex;
 }

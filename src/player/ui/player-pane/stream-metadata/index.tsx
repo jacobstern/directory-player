@@ -6,10 +6,23 @@ import type { StreamMetadata } from "../../../types";
 import useEventListener from "../../../../tauri/hooks/use-event-listener";
 import debounce from "../../../../utils/debounce";
 import classNames from "classnames";
+import { usePlaybackFile } from "../../..";
 
 const EVENT_LISTENER_DEBOUNCE_MILLIS = 100;
 
+function stripExtension(
+  playbackFilePath: string | undefined,
+): string | undefined {
+  if (typeof playbackFilePath === "undefined") return undefined;
+  const dotIndex = playbackFilePath.lastIndexOf(".");
+  if (dotIndex >= 0) {
+    return playbackFilePath.substring(0, dotIndex);
+  }
+  return playbackFilePath;
+}
+
 export default function StreamMetadata() {
+  const playbackFileName = usePlaybackFile()?.name;
   const [latestMetadata, setLatestMetadata] = useState<StreamMetadata | null>(
     null,
   );
@@ -37,31 +50,32 @@ export default function StreamMetadata() {
         "stream-metadata--has-metadata": hasMetadata,
       })}
     >
-      {!!latestMetadata && (
-        <>
-          {imageSrc ? (
-            <img
-              alt="Album cover"
-              className="stream-metadata__image"
-              src={imageSrc}
-            />
-          ) : (
+      <>
+        {imageSrc ? (
+          <img
+            alt="Album cover"
+            className="stream-metadata__image"
+            src={imageSrc}
+          />
+        ) : (
+          !!latestMetadata && (
             <div
               role="presentation"
               className="stream-metadata__image-placeholder"
+              style={{ backgroundColor: latestMetadata.fallback_color }}
             />
-          )}
+          )
+        )}
 
-          <div className="stream-metadata__second-column">
-            <div className="stream-metadata__title">
-              {latestMetadata.track_title}
-            </div>
-            <div className="stream-metadata__artist">
-              {latestMetadata.artist}
-            </div>
+        <div className="stream-metadata__second-column">
+          <div className="stream-metadata__title">
+            {latestMetadata?.track_title ?? stripExtension(playbackFileName)}
           </div>
-        </>
-      )}
+          <div className="stream-metadata__artist">
+            {latestMetadata?.artist}
+          </div>
+        </div>
+      </>
     </div>
   );
 }

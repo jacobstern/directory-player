@@ -1,7 +1,16 @@
-use std::{path::Path, sync::mpsc, thread, time::Duration};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    path::Path,
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 use base64::{engine::general_purpose, Engine};
 use log::{error, info, warn};
+use random_color::RandomColor;
+
 use rtrb::RingBuffer;
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
@@ -18,6 +27,12 @@ use super::{
 };
 
 const STREAM_SEEK_BACK_THRESHOLD_SECONDS_PART: u8 = 3;
+
+fn gen_album_color(path: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    path.hash(&mut hasher);
+    RandomColor::new().seed(hasher.finish()).to_rgba_string()
+}
 
 pub enum ManagerCommand {
     StartPlayback(Vec<String>, usize),
@@ -57,7 +72,6 @@ impl StreamTimingInternal {
 fn gain_for_volume(volume: f64) -> f32 {
     let clamped = volume.max(0_f64).min(100_f64);
     let normalized = clamped / 100.0;
-    // let amp = normalized.powf(2.7);
     let amp = normalized.powf(2.7);
     (amp as f32).min(1.0)
 }
@@ -287,6 +301,10 @@ impl PlaybackManager {
             }
         }
 
+        let parent_path = Path::new(&path)
+            .parent()
+            .map(|path| path.to_str().unwrap())
+            .unwrap_or(&path);
         let meta: StreamMetadata = file_stream
             .metadata()
             .map(|metadata| {
@@ -323,12 +341,14 @@ impl PlaybackManager {
                     track_title,
                     artist,
                     album_cover,
+                    fallback_color: gen_album_color(&parent_path),
                 }
             })
             .unwrap_or(StreamMetadata {
                 track_title: None,
                 artist: None,
                 album_cover: None,
+                fallback_color: gen_album_color(&parent_path),
             });
         self.try_send_event(PlayerEvent::StreamMetadataChange(Some(meta)));
 

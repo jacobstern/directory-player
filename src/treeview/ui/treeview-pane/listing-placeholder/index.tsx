@@ -8,7 +8,7 @@ export default function ListingPlaceholder() {
         File &gt; Open Folder...
       </pre>{" "}
       or <pre className="listing-placeholder__verbatim">⌘O</pre> to select a
-      folder to browse.
+      library folder.
     </div>
   );
 }
