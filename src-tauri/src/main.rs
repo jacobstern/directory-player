@@ -6,7 +6,7 @@ mod player;
 use log::warn;
 use player::{Player, PlayerEvent, RepeatMode, ShuffleMode};
 use serde::Serialize;
-use std::sync::Mutex;
+use std::{process::Command, sync::Mutex};
 use tauri::{
     async_runtime, AboutMetadata, AppHandle, CustomMenuItem, Manager, Menu, MenuItem, Submenu,
 };
@@ -78,6 +78,24 @@ fn player_set_repeat_mode(player_state: tauri::State<PlayerState>, repeat_mode: 
 #[tauri::command]
 async fn show_main_window(window: tauri::Window) {
     window.get_window("main").unwrap().show().unwrap();
+}
+
+/// Show a file in its containing folder a la "Reveal in Finder" in VS Code.
+///
+/// Source: https://github.com/tauri-apps/tauri/issues/4062#issuecomment-1338048169
+#[tauri::command]
+fn show_in_folder(path: String) {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .args(["/select,", &path]) // The comma after select is not a typo
+            .spawn()
+            .unwrap();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").args(["-R", &path]).spawn().unwrap();
+    }
 }
 
 fn try_emit_all<S: Serialize + Clone>(app_handle: &AppHandle, event: &str, payload: S) {
@@ -153,7 +171,8 @@ fn main() {
             player_skip_forward,
             player_skip_back,
             player_set_shuffle_mode,
-            player_set_repeat_mode
+            player_set_repeat_mode,
+            show_in_folder
         ])
         .setup(|app| {
             async_runtime::spawn(poll_player_events(app.handle(), player_event_rx));

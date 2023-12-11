@@ -5,11 +5,10 @@ import ExpandButton from "./expand-button";
 import FileIcon from "./file-icon";
 import PlayingIndicator from "./playing-indicator";
 
-import { open } from "@tauri-apps/api/shell";
 import { showMenu } from "tauri-plugin-context-menu";
-import { getParentPath } from "../../../../../utils/path";
 
 import "./row-list-item.styles.css";
+import { invoke } from "@tauri-apps/api";
 
 export interface RowListItemProps {
   path: string;
@@ -53,13 +52,12 @@ const RowListItem = memo(function RowListItem({
   };
   const handleContextMenu: MouseEventHandler = (event) => {
     event.preventDefault();
-    const directoryPath = fileType === "directory" ? path : getParentPath(path);
     showMenu({
       items: [
         {
-          label: "Open Folder",
+          label: "Reveal in Finder",
           event: async () => {
-            await open(directoryPath);
+            await invoke("show_in_folder", { path });
           },
         },
       ],
