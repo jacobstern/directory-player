@@ -20,6 +20,9 @@ dependencies:
   reselect:
     specifier: ^4.1.8
     version: 4.1.8
+  tauri-plugin-context-menu:
+    specifier: ^0.6.0
+    version: 0.6.0
   tauri-plugin-fs-watch-api:
     specifier: github:tauri-apps/tauri-plugin-fs-watch#v1
     version: github.com/tauri-apps/tauri-plugin-fs-watch/d2e3e6da1f64c012c88c1a76d1ddc4949f5301bf
@@ -2318,6 +2321,12 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
     dev: true
+
+  /tauri-plugin-context-menu@0.6.0:
+    resolution: {integrity: sha512-YpmMtg8kMIaz9MME+pbDsjLpXPTmE7DtUacyiVEKnshYDBBEubkQS2eeXeB8k80r064M9HzaYL4o/iONnQA2xA==}
+    dependencies:
+      '@tauri-apps/api': 1.5.1
+    dev: false
 
   /text-table@0.2.0:
     resolution: {integrity: sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==}

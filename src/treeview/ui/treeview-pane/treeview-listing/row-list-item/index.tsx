@@ -1,9 +1,13 @@
-import { memo } from "react";
-import { FileType } from "../../../../core/file-type";
 import classNames from "classnames";
+import { MouseEventHandler, memo } from "react";
+import { FileType } from "../../../../core/file-type";
 import ExpandButton from "./expand-button";
 import FileIcon from "./file-icon";
 import PlayingIndicator from "./playing-indicator";
+
+import { open } from "@tauri-apps/api/shell";
+import { showMenu } from "tauri-plugin-context-menu";
+import { getParentPath } from "../../../../../utils/path";
 
 import "./row-list-item.styles.css";
 
@@ -47,6 +51,20 @@ const RowListItem = memo(function RowListItem({
       toggleExpanded();
     }
   };
+  const handleContextMenu: MouseEventHandler = (event) => {
+    event.preventDefault();
+    const directoryPath = fileType === "directory" ? path : getParentPath(path);
+    showMenu({
+      items: [
+        {
+          label: "Open Folder",
+          event: async () => {
+            await open(directoryPath);
+          },
+        },
+      ],
+    });
+  };
 
   const nameClasses = classNames("row-list-item__name", {
     "row-list-item__name--no-left-indicator":
@@ -54,7 +72,11 @@ const RowListItem = memo(function RowListItem({
   });
 
   return (
-    <li className="row-list-item" onDoubleClick={handleDoubleClick}>
+    <li
+      className="row-list-item"
+      onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
+    >
       {isPlaying && <PlayingIndicator />}
       <div className="row-list-item__first-col" style={firstColStyle}>
         {fileType === "directory" && (
