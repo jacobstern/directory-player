@@ -139,6 +139,7 @@ fn main() {
     tauri::Builder::default()
         .menu(menu)
         .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_fs_watch::init())
         .manage(PlayerState(Mutex::new(player)))
         .invoke_handler(tauri::generate_handler![
             show_main_window,

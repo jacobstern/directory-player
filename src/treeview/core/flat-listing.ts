@@ -110,7 +110,7 @@ export function getQueueAtCursor(
 }
 
 export function generateFullListing(root: Root): FlatListing {
-  if (root) {
+  if (root && root.children) {
     return recursivelyFlatten(root.children);
   }
   return null;
