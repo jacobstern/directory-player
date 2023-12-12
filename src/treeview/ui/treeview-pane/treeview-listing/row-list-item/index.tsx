@@ -1,5 +1,11 @@
 import classNames from "classnames";
-import { MouseEventHandler, memo } from "react";
+import {
+  MouseEventHandler,
+  memo,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { FileType } from "../../../../core/file-type";
 import ExpandButton from "./expand-button";
 import FileIcon from "./file-icon";
@@ -9,6 +15,11 @@ import { showMenu } from "tauri-plugin-context-menu";
 
 import "./row-list-item.styles.css";
 import { invoke } from "@tauri-apps/api";
+import {
+  containsPathSeparator,
+  renameLastSegment as replaceLastSegment,
+} from "../../../../../utils/path";
+import { renameFile } from "@tauri-apps/api/fs";
 
 export interface RowListItemProps {
   path: string;
@@ -33,6 +44,49 @@ const RowListItem = memo(function RowListItem({
   onCollapseDirectory,
   onPlayback: onPlay,
 }: RowListItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [optimisticName, setOptimisticName] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const didEnableEditingRef = useRef(false);
+  const isRenamingRef = useRef(false);
+
+  const currentName = optimisticName === null ? name : optimisticName;
+
+  useLayoutEffect(() => {
+    if (isEditing && didEnableEditingRef.current) {
+      nameInputRef.current!.focus();
+      const extensionIndex = currentName.lastIndexOf(".");
+      nameInputRef.current!.setSelectionRange(
+        0,
+        extensionIndex === -1 ? currentName.length : extensionIndex,
+      );
+    }
+    didEnableEditingRef.current = false;
+  }, [isEditing, currentName]);
+
+  const doRename = async () => {
+    if (
+      optimisticName === null ||
+      optimisticName === "" ||
+      containsPathSeparator(optimisticName)
+    ) {
+      setOptimisticName(null);
+    } else {
+      const newPath = replaceLastSegment(path, optimisticName);
+      let success = true;
+      isRenamingRef.current = true;
+      try {
+        await renameFile(path, newPath);
+      } catch {
+        success = false;
+      }
+      isRenamingRef.current = false;
+      if (!success) {
+        setOptimisticName(null);
+      }
+    }
+  };
+
   const firstColStyle: React.CSSProperties = {
     paddingLeft: depth * 8,
   };
@@ -54,11 +108,20 @@ const RowListItem = memo(function RowListItem({
     event.preventDefault();
     showMenu({
       items: [
+        // TODO: Open for non-music file
         {
           label: "Reveal in Finder",
           event: async () => {
             await invoke("show_in_folder", { path });
           },
+        },
+        {
+          label: "Rename...",
+          event: () => {
+            didEnableEditingRef.current = true;
+            setIsEditing(true);
+          },
+          disabled: isRenamingRef.current,
         },
       ],
     });
@@ -82,7 +145,35 @@ const RowListItem = memo(function RowListItem({
         )}
         <div className={nameClasses}>
           <FileIcon fileType={fileType} />
-          {name}
+          {isEditing ? (
+            <input
+              className="row-list-item__name-input"
+              ref={nameInputRef}
+              type="text"
+              value={currentName}
+              onBlur={() => {
+                setIsEditing(false);
+                doRename();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === " ") {
+                  e.stopPropagation();
+                }
+                if (e.key === "Enter") {
+                  setIsEditing(false);
+                  doRename();
+                } else if (e.key === "Escape") {
+                  setIsEditing(false);
+                  setOptimisticName(null);
+                }
+              }}
+              onChange={(e) => {
+                setOptimisticName(e.target.value);
+              }}
+            ></input>
+          ) : (
+            currentName
+          )}
         </div>
       </div>
     </li>

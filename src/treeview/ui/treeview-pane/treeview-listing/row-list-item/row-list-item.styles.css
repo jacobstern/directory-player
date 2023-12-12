@@ -33,3 +33,7 @@
 .row-list-item__name--no-left-indicator {
   margin-left: 22px;
 }
+
+.row-list-item__name-input {
+  width: 70vw;
+}

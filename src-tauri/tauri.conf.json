@@ -19,6 +19,7 @@
       "fs": {
         "readDir": true,
         "readFile": true,
+        "renameFile": true,
         "exists": true,
         "scope": ["**"]
       },

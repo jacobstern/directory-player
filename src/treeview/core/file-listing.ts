@@ -7,6 +7,7 @@ import { error, info, warn } from "tauri-plugin-log-api";
 import { normalize } from "@tauri-apps/api/path";
 import { BasicPubSub } from "./basic-pub-sub";
 import { DebouncedEvent, watch } from "tauri-plugin-fs-watch-api";
+import { getLastSegment } from "../../utils/path";
 
 const DIRECTORY_STORAGE_KEY = "treeviewDirectory";
 
@@ -76,6 +77,9 @@ class FileListingImpl implements FileListing {
   }
 
   private handleNotify(event: DebouncedEvent[]): void {
+    if (event.every((e) => getLastSegment(e.path).startsWith("."))) {
+      return;
+    }
     info(`Refreshing listing for paths ${event.map((e) => e.path).join()}`);
     this.refreshRoot();
   }
