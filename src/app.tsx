@@ -2,7 +2,7 @@ import useGlobalPlayPauseKeyHandler from "./hooks/use-global-play-pause-key-even
 import { PlayerPane } from "./player";
 import TreeviewPane from "./treeview/ui/treeview-pane";
 
-import "./App.css";
+import "./app.css";
 
 function App() {
   useGlobalPlayPauseKeyHandler();

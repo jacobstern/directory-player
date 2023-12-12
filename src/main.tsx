@@ -7,10 +7,11 @@ import ReactDOM from "react-dom/client";
 import { invoke } from "@tauri-apps/api";
 import { attachConsole } from "tauri-plugin-log-api";
 
-import App from "./App";
 import { PlaybackFileProvider, PlaybackStateProvider } from "./player";
 import { initFileListing } from "./treeview/core/file-listing";
 import { FileListingContext } from "./treeview/context/file-listing-context";
+
+import App from "./app";
 
 async function main() {
   await attachConsole();

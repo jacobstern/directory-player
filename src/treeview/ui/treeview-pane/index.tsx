@@ -1,9 +1,9 @@
 import { useCallback, useContext } from "react";
+import FileListingContext from "../../context/file-listing-context";
 import useFlatListing from "../../hooks/use-flat-listing";
+import ListingPlaceholder from "./listing-placeholder";
 import TreeviewListing from "./treeview-listing";
 import "./treeview-pane.styles.css";
-import FileListingContext from "../../context/file-listing-context";
-import ListingPlaceholder from "./listing-placeholder";
 
 export default function TreeviewPane() {
   const fileListing = useContext(FileListingContext);

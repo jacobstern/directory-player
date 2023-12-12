@@ -26,9 +26,14 @@ export interface File {
   path: string;
 }
 
+export interface ListingChangeInfo {
+  reset: boolean;
+  deletedPaths?: string[];
+}
+
 export type Root = File | null;
 
-export type ChangeListener = () => void;
+export type ChangeListener = (info: ListingChangeInfo) => void;
 
 export type UnsubscribeFunction = VoidFunction;
 
@@ -42,7 +47,7 @@ export interface FileListing {
 
 class FileListingImpl implements FileListing {
   private root: Root = null;
-  private pubSub = new BasicPubSub();
+  private pubSub = new BasicPubSub<[ListingChangeInfo]>();
   private directoryReverseLookup = new Map<string, File>();
   private unwatchFiles: VoidFunction | null = null;
 
@@ -73,7 +78,7 @@ class FileListingImpl implements FileListing {
         this.directoryReverseLookup.set(child.path, child);
       }
     }
-    this.pubSub.notify();
+    this.pubSub.notify({ reset: true });
   }
 
   private handleNotify(event: DebouncedEvent[]): void {
@@ -116,6 +121,7 @@ class FileListingImpl implements FileListing {
     const removeIndices: number[] = [];
     const newChildrenMap = new Map(listing.map((f) => [f.path, f]));
     let dirty = false;
+    const deletedPaths: string[] = [];
     for (const [i, file] of current.children.entries()) {
       if (newChildrenMap.has(file.path)) {
         const updated = newChildrenMap.get(file.path)!;
@@ -127,6 +133,7 @@ class FileListingImpl implements FileListing {
       } else {
         removeIndices.push(i);
         this.recursivelyUnregisterDirectories(file.path, true);
+        deletedPaths.push(file.path);
         dirty = true;
       }
     }
@@ -142,7 +149,10 @@ class FileListingImpl implements FileListing {
       dirty = true;
     }
     if (dirty) {
-      this.pubSub.notify();
+      this.pubSub.notify({
+        reset: false,
+        deletedPaths,
+      });
     }
   }
 
@@ -168,7 +178,7 @@ class FileListingImpl implements FileListing {
         this.directoryReverseLookup.set(child.path, child);
       }
     }
-    this.pubSub.notify();
+    this.pubSub.notify({ reset: false, deletedPaths: [] });
   }
 
   async collapseDirectory(path: string): Promise<void> {
@@ -183,7 +193,7 @@ class FileListingImpl implements FileListing {
     this.recursivelyUnregisterDirectories(path, false);
     directory.children = [];
     directory.isExpanded = false;
-    this.pubSub.notify();
+    this.pubSub.notify({ reset: false, deletedPaths: [] });
   }
 
   private recursivelyUnregisterDirectories(
