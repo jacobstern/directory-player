@@ -55,14 +55,14 @@ const RowListItem = memo(function RowListItem({
   useLayoutEffect(() => {
     if (isEditing && didEnableEditingRef.current) {
       nameInputRef.current!.focus();
-      const extensionIndex = currentName.lastIndexOf(".");
-      nameInputRef.current!.setSelectionRange(
-        0,
-        extensionIndex === -1 ? currentName.length : extensionIndex,
-      );
+      let selectionEnd = currentName.length;
+      if (fileType !== "directory" && currentName.includes(".")) {
+        selectionEnd = currentName.lastIndexOf(".");
+      }
+      nameInputRef.current!.setSelectionRange(0, selectionEnd);
     }
     didEnableEditingRef.current = false;
-  }, [isEditing, currentName]);
+  }, [fileType, isEditing, currentName]);
 
   const doRename = async () => {
     if (
@@ -169,6 +169,9 @@ const RowListItem = memo(function RowListItem({
               }}
               onChange={(e) => {
                 setOptimisticName(e.target.value);
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
               }}
             ></input>
           ) : (
