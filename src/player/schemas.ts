@@ -26,7 +26,6 @@ export const StreamMetadataSchema = z.object({
   track_title: z.string().nullable(),
   artist: z.string().nullable(),
   album_cover: StreamMetadataVisualSchema.nullable(),
-  fallback_color: z.string(),
 });
 
 export const StreamMetadataPayloadSchema = z.nullable(StreamMetadataSchema);

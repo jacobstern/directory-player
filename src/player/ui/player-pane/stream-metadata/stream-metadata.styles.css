@@ -28,6 +28,10 @@
   box-shadow: 0.5px 0.5px 2px #303038;
 }
 
+.stream-metadata__image-placeholder {
+  background-color: var(--main-bg);
+}
+
 .stream-metadata__second-column {
   min-width: 0;
   display: flex;

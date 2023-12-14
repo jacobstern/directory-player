@@ -79,7 +79,6 @@ pub struct StreamMetadata {
     pub track_title: Option<String>,
     pub artist: Option<String>,
     pub album_cover: Option<StreamMetadataVisual>,
-    pub fallback_color: String,
 }
 
 pub struct Player {

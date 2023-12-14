@@ -62,7 +62,6 @@ export default function StreamMetadata() {
             <div
               role="presentation"
               className="stream-metadata__image-placeholder"
-              style={{ backgroundColor: latestMetadata.fallback_color }}
             />
           )
         )}
