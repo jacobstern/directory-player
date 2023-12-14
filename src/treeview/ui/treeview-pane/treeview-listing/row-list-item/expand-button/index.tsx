@@ -35,6 +35,9 @@ export default function ExpandButton({
       className="expand-button"
       type="button"
       onClick={handleClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+      }}
       title={isExpanded ? "Collapse" : "Expand"}
       tabIndex={-1}
     >

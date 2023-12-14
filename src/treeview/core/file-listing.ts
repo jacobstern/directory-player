@@ -170,7 +170,6 @@ class FileListingImpl implements FileListing {
       throw new Error(`Failed to locate directory at "${path}"`);
     }
     if (directory.isExpanded) return;
-    directory.isExpanded = true;
     const children = await readDir(path, { recursive: false });
     directory.children = children;
     for (const child of children) {
@@ -178,6 +177,7 @@ class FileListingImpl implements FileListing {
         this.directoryReverseLookup.set(child.path, child);
       }
     }
+    directory.isExpanded = true;
     this.pubSub.notify({ reset: false, deletedPaths: [] });
   }
 
