@@ -15,11 +15,13 @@ import { showMenu } from "tauri-plugin-context-menu";
 
 import "./row-list-item.styles.css";
 import { invoke } from "@tauri-apps/api";
+import { open } from "@tauri-apps/api/shell";
 import {
   containsPathSeparator,
   renameLastSegment as replaceLastSegment,
 } from "../../../../../utils/path";
 import { renameFile } from "@tauri-apps/api/fs";
+import { Item as ContextMenuItem } from "tauri-plugin-context-menu/dist/types";
 
 export interface RowListItemProps {
   path: string;
@@ -97,34 +99,45 @@ const RowListItem = memo(function RowListItem({
       onExpandDirectory(path);
     }
   };
-  const handleDoubleClick = () => {
+  const handleDoubleClick = async () => {
     if (fileType === "music-file") {
       onPlay(path);
     } else if (fileType === "directory") {
       toggleExpanded();
+    } else {
+      await open(path);
     }
   };
   const handleContextMenu: MouseEventHandler = (event) => {
     event.preventDefault();
-    showMenu({
-      items: [
-        // TODO: Open for non-music file
-        {
-          label: "Reveal in Finder",
-          event: async () => {
-            await invoke("show_in_folder", { path });
-          },
+    const items: ContextMenuItem[] = [
+      {
+        label: "Reveal in Finder",
+        event: async () => {
+          await invoke("show_in_folder", { path });
         },
-        {
-          label: "Rename...",
-          event: () => {
-            didEnableEditingRef.current = true;
-            setIsEditing(true);
-          },
-          disabled: isRenamingRef.current,
+      },
+      {
+        is_separator: true,
+      },
+      {
+        label: "Rename...",
+        event: () => {
+          didEnableEditingRef.current = true;
+          setIsEditing(true);
         },
-      ],
-    });
+        disabled: isRenamingRef.current,
+      },
+    ];
+    if (fileType !== "music-file") {
+      items.unshift({
+        label: "Open",
+        event: async () => {
+          await open(path);
+        },
+      });
+    }
+    showMenu({ items });
   };
 
   const nameClasses = classNames("row-list-item__name", {
