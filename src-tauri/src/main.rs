@@ -129,6 +129,14 @@ async fn poll_player_events(
 fn build_menu(app_name: &str) -> Menu {
     let file_menu = Menu::new()
         .add_item(CustomMenuItem::new("open", "Open Folder...").accelerator("CommandOrControl+O"));
+    let edit_menu = Menu::new()
+        .add_native_item(MenuItem::Undo)
+        .add_native_item(MenuItem::Redo)
+        .add_native_item(MenuItem::Separator)
+        .add_native_item(MenuItem::Cut)
+        .add_native_item(MenuItem::Copy)
+        .add_native_item(MenuItem::Paste)
+        .add_native_item(MenuItem::SelectAll);
     Menu::new()
         .add_submenu(Submenu::new(
             app_name,
@@ -147,6 +155,7 @@ fn build_menu(app_name: &str) -> Menu {
                 .add_native_item(MenuItem::Quit),
         ))
         .add_submenu(Submenu::new("File", file_menu))
+        .add_submenu(Submenu::new("Edit", edit_menu))
 }
 
 fn main() {

@@ -186,6 +186,9 @@ const RowListItem = memo(function RowListItem({
               onDoubleClick={(e) => {
                 e.stopPropagation();
               }}
+              onContextMenu={(e) => {
+                e.stopPropagation();
+              }}
             ></input>
           ) : (
             currentName
