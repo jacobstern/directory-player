@@ -28,7 +28,6 @@ export interface File {
 
 export interface ListingChangeInfo {
   reset: boolean;
-  deletedPaths?: string[];
 }
 
 export type Root = File | null;
@@ -99,29 +98,31 @@ class FileListingImpl implements FileListing {
       }
     }
     for (const directory of expandedDirectories) {
-      await this.inPlaceUpdateDirectory(directory);
+      const dirty = await this.inPlaceUpdateDirectory(directory);
       if (this.root?.path !== originalPath) {
         break;
+      }
+      if (dirty) {
+        this.pubSub.notify({ reset: false });
       }
     }
   }
 
-  private async inPlaceUpdateDirectory(path: string): Promise<void> {
+  private async inPlaceUpdateDirectory(path: string): Promise<boolean> {
     const current = this.directoryReverseLookup.get(path);
     if (!current) {
       error(`Tried to update ${path} but it was not in the registry`);
-      return;
+      return false;
     }
-    if (!current.isExpanded || !current.children) return;
+    if (!current.children) return false;
     const originalPath = this.root?.path;
     const listing = await readDir(path, { recursive: false });
     if (this.root?.path !== originalPath) {
-      return;
+      return false;
     }
     const removeIndices: number[] = [];
     const newChildrenMap = new Map(listing.map((f) => [f.path, f]));
     let dirty = false;
-    const deletedPaths: string[] = [];
     for (const [i, file] of current.children.entries()) {
       if (newChildrenMap.has(file.path)) {
         const updated = newChildrenMap.get(file.path)!;
@@ -133,7 +134,6 @@ class FileListingImpl implements FileListing {
       } else {
         removeIndices.push(i);
         this.recursivelyUnregisterDirectories(file.path, true);
-        deletedPaths.push(file.path);
         dirty = true;
       }
     }
@@ -148,12 +148,7 @@ class FileListingImpl implements FileListing {
       current.children.push(child);
       dirty = true;
     }
-    if (dirty) {
-      this.pubSub.notify({
-        reset: false,
-        deletedPaths,
-      });
-    }
+    return dirty;
   }
 
   getRoot() {
@@ -170,15 +165,9 @@ class FileListingImpl implements FileListing {
       throw new Error(`Failed to locate directory at "${path}"`);
     }
     if (directory.isExpanded) return;
-    const children = await readDir(path, { recursive: false });
-    directory.children = children;
-    for (const child of children) {
-      if (child.children !== undefined) {
-        this.directoryReverseLookup.set(child.path, child);
-      }
-    }
+    await this.inPlaceUpdateDirectory(path);
     directory.isExpanded = true;
-    this.pubSub.notify({ reset: false, deletedPaths: [] });
+    this.pubSub.notify({ reset: false });
   }
 
   async collapseDirectory(path: string): Promise<void> {
@@ -193,7 +182,7 @@ class FileListingImpl implements FileListing {
     this.recursivelyUnregisterDirectories(path, false);
     directory.children = [];
     directory.isExpanded = false;
-    this.pubSub.notify({ reset: false, deletedPaths: [] });
+    this.pubSub.notify({ reset: false });
   }
 
   private recursivelyUnregisterDirectories(
