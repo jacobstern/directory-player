@@ -317,7 +317,7 @@ impl PlaybackManager {
                     .find(|visual| visual.usage == Some(StandardVisualKey::FrontCover));
                 let album_cover = album_cover_visual.map(|visual| StreamMetadataVisual {
                     media_type: visual.media_type.to_owned(),
-                    data_base64: general_purpose::URL_SAFE.encode(visual.data.as_ref()),
+                    data_base64: general_purpose::STANDARD.encode(visual.data.as_ref()),
                 });
                 StreamMetadata {
                     track_title,
