@@ -1,5 +1,5 @@
 .volume-slider {
-  -webkit-appearance: none;
+  appearance: none;
   margin-left: 16px;
   background: transparent;
   cursor: pointer;
@@ -19,5 +19,5 @@
   -webkit-appearance: none;
   border-radius: 2.5px;
   height: 5px;
-  background-color: #2a604b;
+  background-color: #2a6055;
 }
